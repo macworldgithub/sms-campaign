@@ -3,9 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
-    "start": "next start",
+    "dev:public": "node scripts/public.mjs dev",
+    "build:public": "node scripts/public.mjs build",
+    "start:public": "node scripts/public.mjs start",
+    "start": "next start --hostname 127.0.0.1",
     "lint": "eslint"
   },
   "dependencies": {
