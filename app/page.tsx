@@ -77,6 +77,8 @@ export default function Home() {
   const [senders, setSenders] = useState<
     { sender: string; label?: string; type: string }[]
   >([]);
+  const [sms, setSms] = useState<{ results: Row[]; tests: Row[]; activities: Row[] } | null>(null);
+  const [testRequestId, setTestRequestId] = useState<string | null>(null);
   const api = useCallback(async (path: string, body?: unknown) => {
     const response = await fetch(`/api/portal/${path}`, {
       method: body === undefined ? "GET" : "POST",
@@ -822,6 +824,49 @@ export default function Home() {
                           </dd>
                         </div>
                       </dl>
+                      <p>Test recipient: {String(data!.readiness.testRecipient || 'Not configured')}. Test messages do not launch a campaign.</p>
+                      <button className="button secondary" disabled={busy || !data!.readiness.testSendingEnabled}
+                        onClick={async () => {
+                          if (!window.confirm(`Send one connection-test SMS to ${data!.readiness.testRecipient}?`)) return;
+                          setBusy(true);
+                          const requestId = testRequestId || crypto.randomUUID();
+                          setTestRequestId(requestId);
+                          try {
+                            const result = await api('sms/test', { requestId });
+                            setNotice(`Test SMS status: ${result.status}. Unknown means check with the provider before another attempt.`);
+                            setSms(await api('sms/inbox'));
+                          } catch (error) { setNotice((error as Error).message); }
+                          finally { setBusy(false); }
+                        }}>Send connection test</button>
+                      <button className="button secondary" disabled={busy} onClick={async () => {
+                        setBusy(true);
+                        try { const result = await api('sms/inbox/sync', {}); setSms(result); setNotice(result.truncated ? 'Showing a bounded reply history; additional records remain with the provider.' : 'Replies refreshed for the configured sender.'); }
+                        catch (error) { setNotice((error as Error).message); }
+                        finally { setBusy(false); }
+                      }}>Refresh SMS replies</button>
+                      {sms && <div style={{ marginTop: 16 }}>
+                        <h3>Recent test messages</h3>
+                        {sms.tests.length === 0 && <p>No test messages yet.</p>}
+                        {sms.tests.map(row => <p key={String(row.id)}>{String(row.recipient)} · {String(row.status)} · {date(row.createdAt)}</p>)}
+                        <h3>SMS replies</h3>
+                        {sms.results.length === 0 && <p>No replies received for this sender.</p>}
+                        {sms.results.map(row => <p key={String(row.id)}><strong>{String(row.mobile)}</strong> · {date(row.receivedAt)}<br />{String(row.body)}</p>)}
+                        <h3>DealerSocket SMS activity</h3>
+                        <p>Only conversations linked to this portal's campaigns enter the CRM queue.</p>
+                        {sms.activities?.length === 0 && <p>No SMS activity jobs yet.</p>}
+                        {sms.activities?.map(row => <div key={String(row.id)}><p>{String(row.mobile)} · {String(row.direction)} · {String(row.status)}<br />{String(row.detail || '')}</p>
+                          {row.status === 'needs_match' && <button className="button secondary" disabled={busy} onClick={async () => {
+                            const contactId = window.prompt('Verified DealerSocket customer ID');
+                            if (!contactId) return;
+                            const opportunityId = window.prompt('Verified opportunity ID for that customer');
+                            if (!opportunityId) return;
+                            setBusy(true);
+                            try { await api(`sms/activity/${row.id}/customer`, { contactId, opportunityId }); setSms(await api('sms/inbox')); }
+                            catch (error) { setNotice((error as Error).message); }
+                            finally { setBusy(false); }
+                          }}>Link customer and opportunity</button>}
+                        </div>)}
+                      </div>}
                       <button
                         className="button secondary"
                         disabled={busy}
