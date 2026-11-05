@@ -417,11 +417,11 @@ export default function Home() {
             </label>
 
             <label>
-              New Password (minimum 12 characters)
+              New Password (minimum 6 characters)
               <input
                 name="newPassword"
                 type="password"
-                minLength={12}
+                minLength={6}
                 maxLength={256}
                 required
                 autoComplete="new-password"
