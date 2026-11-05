@@ -28,11 +28,6 @@ export async function POST(
   }
   if (process.env.APP_ROLE !== "public")
     return failure("Public landing service only.", 404);
-  if (Date.now() > Date.parse("2026-12-31T23:59:59+11:00"))
-    return failure(
-      "This loyalty offer has ended. Please call the dealership.",
-      403,
-    );
   if (request.headers.get("origin") !== expectedOrigin)
     return failure("Invalid form origin.", 403);
   const { procedure } = await context.params;
@@ -100,6 +95,10 @@ export async function POST(
       503,
     );
   try {
+    const configResponse = await fetch(`${process.env.BACKEND_URL || "http://127.0.0.1:4000"}/api/public/config`, { cache: "no-store", signal: AbortSignal.timeout(10000) });
+    if (!configResponse.ok) return failure("Offer configuration is temporarily unavailable.", 503);
+    const offer = await configResponse.json();
+    if (!offer.active) return failure("This loyalty offer is not active. Please contact the dealership.", 403);
     const response = await fetch(
       `${process.env.BACKEND_URL || "http://127.0.0.1:4000"}/api/webhooks/leads`,
       {
@@ -115,6 +114,7 @@ export async function POST(
           email,
           mobile,
           token,
+          requireActiveOffer: true,
           contactConsent: true,
           existingCustomer: true,
         }),

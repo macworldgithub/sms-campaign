@@ -17,6 +17,7 @@
 /.next/
 /.next-public/
 /runtime/
+/.public-runtime*.log
 /out/
 
 # production

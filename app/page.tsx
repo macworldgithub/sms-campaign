@@ -1,6 +1,42 @@
 "use client";
+
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import ProductionPanels from "./production-panels";
+import {
+  BarChart3Icon,
+  CheckCircleIcon,
+  CheckIcon,
+  ClockIcon,
+  ExternalLinkIcon,
+  LayoutDashboardIcon,
+  LockIcon,
+  RefreshCwIcon,
+  SearchIcon,
+  SendIcon,
+  ShieldAlertIcon,
+  SlidersIcon,
+  SparklesIcon,
+  UploadCloudIcon,
+  UserCheckIcon,
+  UsersIcon,
+} from "./components/icons";
+import {
+  DELIVERY_MILESTONES,
+  SCOPE_TEMPLATES,
+  calculateSmsTelemetry,
+  type ScopeTemplate,
+} from "./constants/templates";
+
+type StaffUser = {
+  id: string;
+  username: string;
+  name: string;
+  role: "admin" | "campaign_manager" | "viewer";
+  mustChangePassword: boolean;
+};
+
 type Row = Record<string, string | number | null>;
+
 type Data = {
   metrics: Record<string, number>;
   campaigns: Row[];
@@ -10,36 +46,20 @@ type Data = {
   activity: Row[];
   readiness: Record<string, string | boolean>;
 };
-const tabs = [
-  "Overview",
-  "Campaigns",
-  "Audience",
-  "Leads",
-  "Suppression",
-  "Reports",
-  "Integrations",
+
+const navTabs = [
+  { id: "Overview", label: "Overview", icon: LayoutDashboardIcon },
+  { id: "Campaigns", label: "Campaigns", icon: SendIcon },
+  { id: "Audience", label: "Audience", icon: UsersIcon },
+  { id: "Leads", label: "Leads", icon: UserCheckIcon },
+  { id: "Suppression", label: "Suppression", icon: ShieldAlertIcon },
+  { id: "Reports", label: "Reports", icon: BarChart3Icon },
+  { id: "Integrations", label: "Integrations", icon: SlidersIcon },
+  { id: "Operations", label: "Operations", icon: ClockIcon, restricted: true },
+  { id: "Settings", label: "Settings", icon: SlidersIcon, restricted: true },
+  { id: "Staff", label: "Staff", icon: UsersIcon, restricted: true },
 ];
-const icons = ["◫", "↗", "♙", "▤", "⊘", "▥", "◇"];
-const initialCopy =
-  "Booran South Morang Hyundai: An exclusive loyalty offer for valued customers. Explore yours: {link} {optout}";
-function Badge({
-  children,
-  green = false,
-}: {
-  children: React.ReactNode;
-  green?: boolean;
-}) {
-  return <span className={`badge ${green ? "green" : ""}`}>{children}</span>;
-}
-function Empty({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="empty">
-      <span>◇</span>
-      <h3>{title}</h3>
-      <p>{detail}</p>
-    </div>
-  );
-}
+
 function date(v: unknown) {
   return v
     ? new Date(String(v)).toLocaleString("en-AU", {
@@ -51,15 +71,32 @@ function date(v: unknown) {
       })
     : "—";
 }
+
 export default function Home() {
-  const [tab, setTab] = useState("Overview"),
-    [data, setData] = useState<Data | null>(null),
-    [signed, setSigned] = useState(false),
-    [notice, setNotice] = useState(""),
-    [busy, setBusy] = useState(false),
-    [modal, setModal] = useState(false),
-    [copy, setCopy] = useState(initialCopy),
-    [query, setQuery] = useState("");
+  const [user, setUser] = useState<StaffUser | null>(null);
+  const canManage = user?.role === "admin" || user?.role === "campaign_manager";
+  const [tab, setTab] = useState("Overview");
+  const [data, setData] = useState<Data | null>(null);
+  const [signed, setSigned] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [modal, setModal] = useState(false);
+  const [query, setQuery] = useState("");
+
+  // Campaign modal states
+  const [selectedTemplate, setSelectedTemplate] = useState<ScopeTemplate>(
+    SCOPE_TEMPLATES[0]
+  );
+  const [campaignName, setCampaignName] = useState("November Loyalty Offer");
+  const [campaignBody, setCampaignBody] = useState(SCOPE_TEMPLATES[0].body);
+
+  // Match customer resolution modal
+  const [matchLead, setMatchLead] = useState<{ id: string; name: string } | null>(
+    null
+  );
+  const [matchContactId, setMatchContactId] = useState("");
+
+  // DealerSocket and integration state
   const [dealer, setDealer] = useState<{
     session?: { state?: string; message?: string };
     snapshot?: {
@@ -69,16 +106,19 @@ export default function Home() {
       coverageNote?: string;
     };
   } | null>(null);
+
   const [routing, setRouting] = useState<{
     salesManager: string;
     generalManager: string;
     catalog: { observedAt?: string; users: { value: string; text: string }[] };
   } | null>(null);
+
   const [senders, setSenders] = useState<
     { sender: string; label?: string; type: string }[]
   >([]);
   const [sms, setSms] = useState<{ tests: Row[]; messages?: Row[] } | null>(null);
   const [testRequestId, setTestRequestId] = useState<string | null>(null);
+
   const api = useCallback(async (path: string, body?: unknown) => {
     const response = await fetch(`/api/portal/${path}`, {
       method: body === undefined ? "GET" : "POST",
@@ -94,23 +134,43 @@ export default function Home() {
     if (!response.ok) throw new Error(result.message || "Request failed");
     return result;
   }, []);
+
   const refresh = useCallback(async () => {
     try {
+      const who = await api("me");
+      setUser(who);
+      if (who.mustChangePassword) {
+        setData({
+          metrics: {},
+          campaigns: [],
+          contacts: [],
+          leads: [],
+          suppressions: [],
+          activity: [],
+          readiness: {},
+        });
+        setSigned(true);
+        return;
+      }
       setData(await api("portal"));
       setSigned(true);
     } catch (error) {
       setNotice((error as Error).message);
     }
   }, [api]);
+
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
   useEffect(() => {
-    if (signed && tab === "Integrations")
+    if (signed && tab === "Integrations") {
       void api("routing")
         .then(setRouting)
         .catch(() => {});
+    }
   }, [signed, tab, api]);
+
   useEffect(() => {
     if (!signed || tab !== "Integrations") return;
     const load = () =>
@@ -121,6 +181,7 @@ export default function Home() {
     const timer = setInterval(load, 15000);
     return () => clearInterval(timer);
   }, [signed, tab, api]);
+
   useEffect(() => {
     if (!signed || tab !== "Integrations") return;
     const load = () => void api("sms/outbound").then(setSms).catch(() => {});
@@ -128,20 +189,26 @@ export default function Home() {
     const timer = setInterval(load, 15000);
     return () => clearInterval(timer);
   }, [signed, tab, api]);
+
   useEffect(() => {
     if (!signed) return;
     const timer = setInterval(() => void refresh(), 30000);
     return () => clearInterval(timer);
   }, [signed, refresh]);
+
   async function action(path: string, body: unknown = {}) {
+    if (!canManage) {
+      setNotice("Your account has read-only access.");
+      return;
+    }
     setBusy(true);
     setNotice("");
     try {
       const result = await api(path, body);
       setNotice(
         result.sent !== undefined
-          ? `${result.sent} accepted; ${result.uncertain} require review.`
-          : "Saved successfully.",
+          ? `${result.sent} SMS dispatched; ${result.uncertain} require review.`
+          : result.message || "Action saved successfully."
       );
       await refresh();
       return result;
@@ -151,13 +218,15 @@ export default function Home() {
       setBusy(false);
     }
   }
+
   async function login(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
     try {
-      await api("login", {
-        password: new FormData(e.currentTarget).get("password"),
-      });
+      const f = new FormData(e.currentTarget);
+      const username = f.get("username") || "admin";
+      const password = f.get("password");
+      await api("login", { username, password });
       setNotice("");
       await refresh();
     } catch (error) {
@@ -166,13 +235,29 @@ export default function Home() {
       setBusy(false);
     }
   }
-  const m = data?.metrics || {};
-  const oneWay = data?.readiness.smsChannelMode !== "two_way";
-  const filtered = (rows: Row[]) =>
-    rows.filter((r) =>
-      Object.values(r).join(" ").toLowerCase().includes(query.toLowerCase()),
-    );
+
+  async function changePassword(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const f = new FormData(e.currentTarget);
+      const currentPassword = f.get("currentPassword");
+      const newPassword = f.get("newPassword");
+      await api("password", { currentPassword, newPassword });
+      setNotice("Password updated successfully. Please sign in with your new password.");
+      setSigned(false);
+    } catch (error) {
+      setNotice((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function importFile(file: File) {
+    if (!canManage) {
+      setNotice("Your account has read-only access.");
+      return;
+    }
     setBusy(true);
     try {
       if (file.size > 5 * 1024 * 1024)
@@ -188,10 +273,14 @@ export default function Home() {
         : "";
       const result = await api(
         workbook ? "contacts/import-workbook" : "contacts/import",
-        workbook ? { base64: encoded } : { rows: parseCSV(await file.text()) },
+        workbook ? { base64: encoded } : { rows: parseCSV(await file.text()) }
       );
       setNotice(
-        `${result.imported} imported · ${result.duplicates} duplicates · ${result.rejected.length} rejected${result.rejected.length ? `: row ${result.rejected[0].row} — ${result.rejected[0].reason}` : ""}`,
+        `Import summary: ${result.imported} added · ${result.duplicates} duplicates · ${result.rejected.length} rejected${
+          result.rejected.length
+            ? ` (Row ${result.rejected[0].row}: ${result.rejected[0].reason})`
+            : ""
+        }`
       );
       await refresh();
     } catch (error) {
@@ -200,998 +289,1430 @@ export default function Home() {
       setBusy(false);
     }
   }
-  return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <a className="brand" href="/">
-          <span className="brand-mark">
-            b<i>•</i>
-          </span>
-          <div>
-            BOORAN<small>LOYALTY STUDIO</small>
-          </div>
-        </a>
-        <div className="workspace">
-          <span className="workspace-icon">H</span>
-          <div>
-            <strong>South Morang Hyundai</strong>
-            <small>Booran Motors Group</small>
-          </div>
-          <span>⌄</span>
-        </div>
-        <p className="nav-label">WORKSPACE</p>
-        <nav>
-          {tabs.map((name, i) => (
-            <button
-              className={tab === name ? "active" : ""}
-              key={name}
-              onClick={() => {
-                setTab(name);
-                setQuery("");
-              }}
-            >
-              <span className="nav-icon">{icons[i]}</span>
-              {name}
-              {name === "Leads" && m.pending > 0 && (
-                <span className="nav-count">{m.pending}</span>
-              )}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="help-card">
-            <span>✧</span>
-            <strong>
-              A little loyalty.
-              <br />A lasting connection.
-            </strong>
-            <p>Bring your customers back to what moves them.</p>
-          </div>
-          <div className="user">
-            <span className="avatar">SM</span>
-            <div>
-              <strong>Campaign workspace</strong>
-              <small>South Morang Hyundai</small>
+
+  // -------------------------------------------------------------
+  // PART 2: DEDICATED FULL-SCREEN LOGIN GATE (WHEN !signed)
+  // -------------------------------------------------------------
+  if (!signed) {
+    return (
+      <div className="login-gate-wrapper">
+        <div className="login-card">
+          <div className="login-header">
+            <div className="login-badge">H</div>
+            <div className="login-title">
+              <h1>Booran South Morang Hyundai</h1>
+              <p>Loyalty Campaign Studio</p>
             </div>
           </div>
-          <span className="powered">
-            Powered by <b>OmniSuiteAI</b>
-          </span>
+
+          <div style={{ marginBottom: 20 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px 0", color: "var(--ink)" }}>
+              Campaign Workspace
+            </h2>
+            <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
+              Authorized access for Booran Motors Group campaign operations.
+            </p>
+          </div>
+
+          <form onSubmit={login} className="login-form">
+            <label>
+              Staff Username
+              <input
+                name="username"
+                type="text"
+                defaultValue="admin"
+                autoComplete="username"
+                required
+              />
+            </label>
+
+            <label>
+              Workspace Access Password
+              <input
+                name="password"
+                type="password"
+                placeholder="Enter password"
+                autoComplete="current-password"
+                required
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={busy}
+              className="btn btn-primary"
+              style={{ width: "100%", padding: "12px", marginTop: "4px" }}
+            >
+              {busy ? "Authenticating…" : "Unlock Workspace →"}
+            </button>
+          </form>
+
+          {notice && (
+            <div
+              style={{
+                marginTop: 16,
+                padding: "10px 14px",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                borderRadius: 8,
+                color: "#991b1b",
+                fontSize: 12,
+              }}
+            >
+              {notice}
+            </div>
+          )}
+
+          <div className="login-footer-text">
+            <span>Confidential • Prepared by </span>
+            <strong style={{ color: "#334155" }}>OmniSuiteAI</strong>
+            <span> for Booran Motors Group</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // MANDATORY FIRST-LOGIN PASSWORD CHANGE
+  // -------------------------------------------------------------
+  if (user?.mustChangePassword) {
+    return (
+      <div className="login-gate-wrapper">
+        <div className="login-card">
+          <div className="login-header">
+            <div className="login-badge">H</div>
+            <div className="login-title">
+              <h1>Booran South Morang Hyundai</h1>
+              <p>Security Requirement</p>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px 0", color: "var(--ink)" }}>
+              Change Temporary Password
+            </h2>
+            <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
+              Welcome, {user.name}. You must update your temporary password before accessing campaign operations.
+            </p>
+          </div>
+
+          <form onSubmit={changePassword} className="login-form">
+            <label>
+              Current Password
+              <input
+                name="currentPassword"
+                type="password"
+                required
+                autoComplete="current-password"
+              />
+            </label>
+
+            <label>
+              New Password (minimum 12 characters)
+              <input
+                name="newPassword"
+                type="password"
+                minLength={12}
+                maxLength={256}
+                required
+                autoComplete="new-password"
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={busy}
+              className="btn btn-primary"
+              style={{ width: "100%", padding: "12px", marginTop: "4px" }}
+            >
+              {busy ? "Updating…" : "Update Password & Continue →"}
+            </button>
+          </form>
+
+          {notice && (
+            <div
+              style={{
+                marginTop: 16,
+                padding: "10px 14px",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                borderRadius: 8,
+                color: "#991b1b",
+                fontSize: 12,
+              }}
+            >
+              {notice}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const m = data?.metrics || {};
+  const oneWay = data?.readiness?.smsChannelMode !== "two_way";
+  const telemetry = calculateSmsTelemetry(campaignBody);
+
+  const filteredContacts = (rows: Row[]) =>
+    rows.filter((r) =>
+      Object.values(r).join(" ").toLowerCase().includes(query.toLowerCase())
+    );
+
+  return (
+    <div className="app-shell">
+      {/* ------------------------------------------------------------- */}
+      {/* TAB 1: SIDEBAR                                                */}
+      {/* ------------------------------------------------------------- */}
+      <aside className="sidebar">
+        <a className="brand" href="/">
+          <div className="brand-badge">H</div>
+          <div className="brand-text">
+            <h1>Booran South Morang Hyundai</h1>
+            <p>Loyalty Campaign Studio</p>
+          </div>
+        </a>
+
+        <div className="dealership-pill">
+          <span className="rooftop-name">South Morang Hyundai</span>
+          <span className="site-id">SITE 10876</span>
+        </div>
+
+        <p className="nav-label">WORKSPACE</p>
+
+        <nav className="nav-list">
+          {navTabs
+            .filter((t) => !t.restricted || user?.role === "admin" || canManage)
+            .map((item) => {
+              const Icon = item.icon;
+              const isActive = tab === item.id;
+              const showPendingCount = item.id === "Leads" && (m.pending || 0) > 0;
+
+              return (
+                <button
+                  key={item.id}
+                  className={`nav-item ${isActive ? "active" : ""}`}
+                  onClick={() => {
+                    setTab(item.id);
+                    setQuery("");
+                  }}
+                >
+                  <span className="nav-item-content">
+                    <Icon className="w-4 h-4" />
+                    <span>{item.label}</span>
+                  </span>
+                  {showPendingCount && (
+                    <span className="nav-badge-count">{m.pending}</span>
+                  )}
+                </button>
+              );
+            })}
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="partnership-badge">
+            <p>
+              Campaign Architecture by <strong>OmniSuiteAI</strong>
+              <br />
+              <span style={{ fontSize: 9, color: "var(--muted)" }}>
+                Go-Live Target: 9 Nov 2026 • Confidential
+              </span>
+            </p>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <strong style={{ fontSize: 12, display: "block", color: "var(--ink)" }}>
+                {user?.name || "Administrator"}
+              </strong>
+              <span style={{ fontSize: 10, color: "var(--muted)", textTransform: "capitalize" }}>
+                {user?.role?.replaceAll("_", " ")}
+              </span>
+            </div>
+
+            <button
+              className="signout-button"
+              title="Sign out of portal"
+              onClick={async () => {
+                await api("logout", {});
+                setSigned(false);
+                setData(null);
+                setUser(null);
+              }}
+            >
+              <LockIcon className="w-3.5 h-3.5" />
+              Sign out
+            </button>
+          </div>
         </div>
       </aside>
+
+      {/* ------------------------------------------------------------- */}
+      {/* MAIN SHELL                                                    */}
+      {/* ------------------------------------------------------------- */}
       <div className="main-shell">
+        {/* TOPBAR */}
         <header className="topbar">
-          <span>
-            Workspace <i>/</i> <strong>{tab}</strong>
-          </span>
-          <div className="top-actions">
-            <span>◷ &nbsp; Melbourne time</span>
+          <div className="breadcrumb-area">
+            <span>Workspace</span>
+            <span>/</span>
+            <strong>{tab}</strong>
+          </div>
+
+          <div className="topbar-right">
+            <div className="status-pill-countdown">
+              <span className="pulse-dot" />
+              <span>● Staging (Target: 9 Nov 2026)</span>
+            </div>
+
+            <div className="acma-badge">
+              <CheckCircleIcon className="w-3.5 h-3.5" />
+              <span>ACMA Verified: BooranSMH</span>
+            </div>
+
             <button
-              className="icon-button"
-              title="Refresh data"
+              className="sync-button"
+              title="Refresh telemetry"
               onClick={() => void refresh()}
             >
-              ↻
+              <RefreshCwIcon className="w-4 h-4" />
             </button>
-            <span className="avatar small">SM</span>
           </div>
         </header>
-        <main>
-          <div className="page-heading">
+
+        {/* CONTENT AREA */}
+        <main className="content-area">
+          <div className="page-header">
             <div>
-              <p className="eyebrow">
-                SOUTH MORANG HYUNDAI · LOYALTY PROGRAMME
+              <p
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "var(--red)",
+                  margin: "0 0 4px 0",
+                }}
+              >
+                SOUTH MORANG HYUNDAI · PREVIOUS CLIENT RE-ENGAGEMENT
               </p>
-              <h1>{tab === "Overview" ? "Every connection counts." : tab}</h1>
+              <h2>{tab === "Overview" ? "Loyalty Campaign Operations" : tab}</h2>
               <p>
                 {tab === "Overview"
-                  ? "Your loyalty campaign, from first message to the next conversation."
+                  ? "Re-engaging previous customers with an exclusive loyalty reward, directed to loyalty.smh.goodshowroom.com."
                   : (
                       {
                         Campaigns:
-                          "Thoughtful messages. Meaningful customer connections.",
+                          "Review client-approved templates and manage broadcast dispatch.",
                         Audience:
-                          "Consented customers, organised and ready to reconnect.",
-                        Leads: "New conversations, ready for your sales team.",
+                          "Consented previous customers with Spam Act 2003 audit evidence.",
+                        Leads:
+                          "Dual-CRM enquiry pipeline: DealerSocket & Good Showroom Sales Floor.",
                         Suppression:
-                          "Respect every preference. Keep your do-not-contact list up to date.",
+                          "Automatic real-time exclusion on STOP replies, web opt-outs, and lead submissions.",
                         Reports:
-                          "The results behind every customer connection.",
-                        Integrations: "Connect your campaign from end to end.",
+                          "Full conversion telemetry: sent, delivered, clicks, and enquiries.",
+                        Integrations:
+                          "MobileMessage Sender ID, GoodShowroom Subdomain, and DealerSocket connector.",
+                        Operations:
+                          "Background worker queue, dispatch journal, and reconciliation.",
+                        Settings: "Client offer approval, terms, and promotion expiry.",
+                        Staff: "Operator roles and authorized campaign accounts.",
                       } as Record<string, string>
                     )[tab]}
               </p>
             </div>
-            <div className="heading-actions">
+
+            <div className="header-action-group">
               <button
-                className="button secondary"
+                className="btn btn-secondary"
                 onClick={() => setTab("Audience")}
               >
-                ↑ &nbsp; Import audience
+                <UploadCloudIcon className="w-4 h-4" />
+                Import Audience
               </button>
-              <button className="button primary" onClick={() => setModal(true)}>
-                ＋ &nbsp; New campaign
+
+              <button
+                className="btn btn-primary"
+                onClick={() => setModal(true)}
+              >
+                <SparklesIcon className="w-4 h-4" />
+                New Campaign
               </button>
             </div>
           </div>
-          {!signed ? (
-            <div className="login-wrap">
-              <section className="panel login">
-                <p className="eyebrow">BOORAN / LOYALTY STUDIO</p>
-                <h2>Welcome to your workspace.</h2>
-                <p>Sign in to manage campaigns and customer connections.</p>
-                <form onSubmit={login}>
-                  <label>
-                    Portal password
+
+          {notice && (
+            <div
+              style={{
+                marginBottom: 24,
+                padding: "12px 18px",
+                background: "#f0fdf4",
+                border: "1px solid #bbf7d0",
+                borderRadius: 8,
+                color: "#166534",
+                fontSize: 13,
+                fontWeight: 500,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <span>{notice}</span>
+              <button
+                style={{ background: "none", border: "none", color: "#166534", fontWeight: 700 }}
+                onClick={() => setNotice("")}
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          {/* ------------------------------------------------------------- */}
+          {/* TAB 2: OVERVIEW & COMMAND CENTER                              */}
+          {/* ------------------------------------------------------------- */}
+          {tab === "Overview" && (
+            <>
+              {/* 4-STAGE DELIVERY MILESTONE TRACKER (SCOPE SECTION 7) */}
+              <section className="stepper-card">
+                <div className="stepper-header">
+                  <div>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 2px 0", color: "var(--ink)" }}>
+                      Campaign Delivery Milestones
+                    </h3>
+                    <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>
+                      4-phase roadmap leading to Go-Live on 9 November 2026.
+                    </p>
+                  </div>
+                  <span className="badge badge-green">GO-LIVE: 9 NOV 2026</span>
+                </div>
+
+                <div className="stepper-grid">
+                  {DELIVERY_MILESTONES.map((m) => (
+                    <div key={m.step} className={`stepper-item ${m.status}`}>
+                      <div className="stepper-top">
+                        <span className="stepper-step-num">Step 0{m.step}</span>
+                        <span className="stepper-badge-status">
+                          {m.status === "completed"
+                            ? "Completed"
+                            : m.status === "in_progress"
+                            ? "In Progress"
+                            : "Upcoming"}
+                        </span>
+                      </div>
+                      <div className="stepper-title">{m.title}</div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: "var(--red)", marginBottom: 4 }}>
+                        {m.dates} · {m.owner}
+                      </div>
+                      <p className="stepper-desc">{m.details}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* 4 TOP RE-ENGINEERED KPI METRIC CARDS */}
+              <div className="metric-grid">
+                <div className="metric-card">
+                  <div className="metric-top">
+                    <span className="metric-label">Consented Audience</span>
+                    <div className="metric-icon-wrap">
+                      <UsersIcon className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div className="metric-number">
+                    {Number(m.contacts || 0).toLocaleString()}
+                  </div>
+                  <div className="metric-sub">
+                    <strong style={{ color: "#166534" }}>{Number(m.eligible || 0).toLocaleString()}</strong> eligible after suppression check
+                  </div>
+                </div>
+
+                <div className="metric-card">
+                  <div className="metric-top">
+                    <span className="metric-label">Verified SMS Dispatched</span>
+                    <div className="metric-icon-wrap">
+                      <SendIcon className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div className="metric-number">
+                    {Number(m.sent || 0).toLocaleString()}
+                  </div>
+                  <div className="metric-sub">
+                    {m.delivered || 0} confirmed delivered via MobileMessage
+                  </div>
+                </div>
+
+                <div className="metric-card">
+                  <div className="metric-top">
+                    <span className="metric-label">Landing Engagement</span>
+                    <div className="metric-icon-wrap">
+                      <ExternalLinkIcon className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div className="metric-number">
+                    {Number(m.clicks || 0).toLocaleString()}
+                  </div>
+                  <div className="metric-sub">
+                    Tracked visits to loyalty.smh.goodshowroom.com
+                  </div>
+                </div>
+
+                <div className="metric-card">
+                  <div className="metric-top">
+                    <span className="metric-label">Captured Leads</span>
+                    <div className="metric-icon-wrap">
+                      <UserCheckIcon className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div className="metric-number">
+                    {Number(m.leads || 0).toLocaleString()}
+                  </div>
+                  <div className="metric-sub">
+                    {m.pending || 0} pending dual-CRM synchronisation
+                  </div>
+                </div>
+              </div>
+
+              {/* CAMPAIGN LAUNCH READINESS CHECKLIST */}
+              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 24, marginBottom: 28 }}>
+                <section className="panel" style={{ margin: 0 }}>
+                  <div className="panel-header">
+                    <div>
+                      <h3>ACMA Compliance & Launch Readiness</h3>
+                      <p>Full Spam Act 2003 and telco Sender ID verification checklist.</p>
+                    </div>
+                    <span className="badge badge-green">TARGET: 9 NOV</span>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {[
+                      ["Consented Target List Ingested", Number(m.contacts || 0) > 0],
+                      [
+                        "Final SMS Copy Approved",
+                        Boolean(data?.campaigns?.some((c) => c.approved)),
+                      ],
+                      ["MobileMessage Provider Connected", Boolean(data?.readiness?.provider)],
+                      [
+                        "Alphanumeric Sender ID Registered (BooranSMH)",
+                        Boolean(data?.readiness?.senderRegistered),
+                      ],
+                      [
+                        "GoodShowroom Subdomain & Netlify Embed Active",
+                        Boolean(data?.readiness?.publicUrl),
+                      ],
+                      [
+                        "Real-time STOP & Enquiry Suppression Wired",
+                        true,
+                      ],
+                      [
+                        "Dual-CRM Lead Routing Configured (SM & GM)",
+                        Boolean(routing?.salesManager && routing?.generalManager),
+                      ],
+                    ].map(([label, ok]) => (
+                      <div
+                        key={String(label)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "10px 14px",
+                          background: "#f8fafc",
+                          border: "1px solid var(--border)",
+                          borderRadius: 8,
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span
+                            style={{
+                              width: 20,
+                              height: 20,
+                              borderRadius: "50%",
+                              background: ok ? "#22c55e" : "#e2e8f0",
+                              color: ok ? "#ffffff" : "#64748b",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: 11,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {ok ? "✓" : "○"}
+                          </span>
+                          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
+                            {label}
+                          </span>
+                        </div>
+                        <span className={`badge ${ok ? "badge-green" : "badge-amber"}`}>
+                          {ok ? "Ready" : "Pending"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* RECENT ACTIVITY STREAM */}
+                <section className="panel" style={{ margin: 0 }}>
+                  <div className="panel-header">
+                    <div>
+                      <h3>Recent Audit Activity</h3>
+                      <p>Compliance and dispatch journal.</p>
+                    </div>
+                  </div>
+
+                  {data?.activity?.length ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {data.activity.slice(0, 6).map((a) => (
+                        <div
+                          key={String(a.id)}
+                          style={{
+                            padding: "8px 12px",
+                            background: "#f8fafc",
+                            border: "1px solid var(--border)",
+                            borderRadius: 8,
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                            <strong style={{ fontSize: 12, color: "var(--ink)" }}>
+                              {a.action}
+                            </strong>
+                            <span style={{ fontSize: 10, color: "var(--muted)" }}>
+                              {date(a.createdAt)}
+                            </span>
+                          </div>
+                          <p style={{ margin: 0, fontSize: 11, color: "var(--muted)" }}>
+                            {a.detail}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="empty-state">
+                      <h4>Activity Journal Ready</h4>
+                      <p>List imports, copy approvals, and dispatches are audited here.</p>
+                    </div>
+                  )}
+                </section>
+              </div>
+            </>
+          )}
+
+          {/* ------------------------------------------------------------- */}
+          {/* TAB 3: CAMPAIGNS                                              */}
+          {/* ------------------------------------------------------------- */}
+          {tab === "Campaigns" && (
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <h3>Loyalty Outreach Campaigns</h3>
+                  <p>7 client-approved templates tailored for previous South Morang Hyundai customers.</p>
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => setModal(true)}
+                >
+                  ＋ Create New Campaign
+                </button>
+              </div>
+
+              {!data?.campaigns?.length ? (
+                <div className="empty-state">
+                  <h4>No Campaigns Created Yet</h4>
+                  <p>
+                    Select from the 7 client-approved scope templates to launch your verified SMS broadcast.
+                  </p>
+                  <button
+                    className="btn btn-primary"
+                    style={{ marginTop: 14 }}
+                    onClick={() => setModal(true)}
+                  >
+                    Create First Campaign
+                  </button>
+                </div>
+              ) : (
+                <div className="table-container">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>CAMPAIGN TITLE</th>
+                        <th>STATUS</th>
+                        <th>RECIPIENTS</th>
+                        <th>CREATED</th>
+                        <th>ACTION</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.campaigns.map((c) => (
+                        <tr key={String(c.id)}>
+                          <td>
+                            <strong style={{ display: "block", color: "var(--ink)" }}>
+                              {c.name}
+                            </strong>
+                            <span style={{ fontSize: 11, color: "var(--muted)" }}>
+                              Sender: BooranSMH · Subdomain: loyalty.smh.goodshowroom.com
+                            </span>
+                          </td>
+                          <td>
+                            <span
+                              className={`badge ${
+                                c.status === "completed"
+                                  ? "badge-green"
+                                  : c.status === "approved"
+                                  ? "badge-blue"
+                                  : c.status === "sending"
+                                  ? "badge-amber"
+                                  : ""
+                              }`}
+                            >
+                              {String(c.status).replaceAll("_", " ")}
+                            </span>
+                          </td>
+                          <td>{c.recipients || 0}</td>
+                          <td>{date(c.createdAt)}</td>
+                          <td>
+                            {c.status === "draft" ? (
+                              <button
+                                disabled={busy || !canManage}
+                                className="btn btn-secondary"
+                                style={{ padding: "6px 12px", fontSize: 12 }}
+                                onClick={() => {
+                                  if (
+                                    window.confirm(
+                                      `Authorize & Approve SMS Copy:\n\n${c.body}`
+                                    )
+                                  ) {
+                                    void action(`campaigns/${c.id}/approve`);
+                                  }
+                                }}
+                              >
+                                Review & Approve
+                              </button>
+                            ) : c.status === "approved" ? (
+                              <button
+                                disabled={busy || !canManage}
+                                className="btn btn-primary"
+                                style={{ padding: "6px 12px", fontSize: 12 }}
+                                onClick={() => {
+                                  if (
+                                    window.confirm(
+                                      "Dispatch this verified SMS broadcast to all eligible consented recipients?"
+                                    )
+                                  ) {
+                                    void action(`campaigns/${c.id}/send`);
+                                  }
+                                }}
+                              >
+                                Send Campaign ↗
+                              </button>
+                            ) : (
+                              <span style={{ color: "var(--muted)", fontSize: 12 }}>—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ------------------------------------------------------------- */}
+          {/* TAB 4: AUDIENCE & ACMA CONSENT HYGIENE                        */}
+          {/* ------------------------------------------------------------- */}
+          {tab === "Audience" && (
+            <>
+              {/* UPLOAD DROPZONE */}
+              <section className="panel">
+                <div className="panel-header">
+                  <div>
+                    <h3>Target List Ingestion & ACMA Hygiene</h3>
+                    <p>
+                      Supports client-supplied CSV or Excel (.xlsx). Mandatory columns:{" "}
+                      <code>mobile</code>, <code>consent</code> (express/inferred), <code>evidence</code>.
+                    </p>
+                  </div>
+                  <a
+                    className="btn btn-secondary"
+                    href="/audience-template.csv"
+                    download
+                  >
+                    ↓ Download CSV Template
+                  </a>
+                </div>
+
+                <label className="dropzone">
+                  <UploadCloudIcon className="w-10 h-10" style={{ color: "var(--red)", margin: "0 auto 12px" }} />
+                  <strong style={{ fontSize: 15, display: "block", color: "var(--ink)", marginBottom: 4 }}>
+                    Drag & Drop Consented Audience List
+                  </strong>
+                  <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 14px 0" }}>
+                    CSV or XLSX · Up to 10,000 previous customer records · Valid Australian mobile format
+                  </p>
+                  <span className="btn btn-secondary" style={{ pointerEvents: "none" }}>
+                    Select File on Computer
+                  </span>
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    disabled={busy || !canManage}
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void importFile(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </section>
+
+              {/* AUDIENCE TELEMETRY & TABLE */}
+              <section className="panel">
+                <div className="panel-header">
+                  <div>
+                    <h3>
+                      Consented Audience Roster{" "}
+                      <span className="badge badge-blue">{m.contacts || 0} Contacts</span>
+                    </h3>
+                    <p>Deduplicated customer records ready for verified broadcast.</p>
+                  </div>
+
+                  <div style={{ position: "relative", width: 280 }}>
                     <input
-                      name="password"
-                      type="password"
-                      autoComplete="current-password"
+                      placeholder="Search by name, mobile, evidence…"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "8px 12px 8px 32px",
+                        border: "1px solid var(--border)",
+                        borderRadius: 6,
+                        fontSize: 12,
+                      }}
+                    />
+                    <SearchIcon
+                      className="w-4 h-4"
+                      style={{
+                        position: "absolute",
+                        left: 10,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        color: "var(--muted)",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {data?.contacts?.length ? (
+                  <div className="table-container">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>CUSTOMER NAME</th>
+                          <th>MOBILE</th>
+                          <th>CONSENT</th>
+                          <th>EVIDENCE TRAIL</th>
+                          <th>STATUS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredContacts(data.contacts).map((c) => (
+                          <tr key={String(c.id)}>
+                            <td>
+                              <strong style={{ color: "var(--ink)" }}>
+                                {c.firstName || "Customer"} {c.lastName || ""}
+                              </strong>
+                              {c.dealerSocketContactId && (
+                                <span style={{ fontSize: 10, color: "var(--muted)", display: "block" }}>
+                                  CRM ID: {c.dealerSocketContactId}
+                                </span>
+                              )}
+                            </td>
+                            <td>{c.mobile}</td>
+                            <td>
+                              <span
+                                className={`badge ${
+                                  c.consent === "express" ? "badge-green" : "badge-blue"
+                                }`}
+                              >
+                                {c.consent}
+                              </span>
+                            </td>
+                            <td style={{ maxWidth: 300, fontSize: 12, color: "var(--muted)" }}>
+                              {c.evidence}
+                            </td>
+                            <td>
+                              <span
+                                className={`badge ${
+                                  c.suppressionReason ? "badge-red" : "badge-green"
+                                }`}
+                              >
+                                {c.suppressionReason || "Eligible for send"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <h4>No Audience Records Ingested</h4>
+                    <p>Upload your client-supplied list above to populate the campaign audience.</p>
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+
+          {/* ------------------------------------------------------------- */}
+          {/* TAB 5: LEADS & DUAL-CRM PIPELINE                              */}
+          {/* ------------------------------------------------------------- */}
+          {tab === "Leads" && (
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <h3>Dual-CRM Enquiry Pipeline</h3>
+                  <p>
+                    Landing page submissions from loyalty.smh.goodshowroom.com dispatched in parallel to DealerSocket & Good Showroom Sales Floor.
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <span className="badge badge-amber">
+                    {m.pending || 0} Pending CRM Save
+                  </span>
+                </div>
+              </div>
+
+              {data?.leads?.length ? (
+                <div className="table-container">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>CUSTOMER</th>
+                        <th>CONTACT DETAILS</th>
+                        <th>DEALERSOCKET (SITE 10876)</th>
+                        <th>GOODSHOWROOM SALES FLOOR</th>
+                        <th>REGISTERED AT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.leads.map((l) => (
+                        <tr key={String(l.id)}>
+                          <td>
+                            <strong style={{ color: "var(--ink)", display: "block" }}>
+                              {l.firstName} {l.lastName}
+                            </strong>
+                            <span style={{ fontSize: 11, color: "var(--muted)" }}>
+                              Ref: {String(l.id).slice(0, 8)}
+                            </span>
+                          </td>
+                          <td>
+                            <div style={{ fontSize: 13, fontWeight: 500 }}>{l.mobile}</div>
+                            <small style={{ color: "var(--muted)" }}>{l.email || "No email provided"}</small>
+                          </td>
+                          <td>
+                            <span
+                              className={`badge ${
+                                l.crmStatus === "synced"
+                                  ? "badge-green"
+                                  : l.crmStatus === "needs_match"
+                                  ? "badge-amber"
+                                  : ""
+                              }`}
+                            >
+                              {String(l.crmStatus || "pending").replaceAll("_", " ")}
+                            </span>
+                            <small style={{ display: "block", color: "var(--muted)", marginTop: 2 }}>
+                              {l.crmDetail || "Primary SM & Secondary GM"}
+                            </small>
+
+                            {/* Resolution Button for needs_match */}
+                            {!l.dealerSocketContactId &&
+                              ["pending_configuration", "needs_match"].includes(
+                                String(l.crmStatus)
+                              ) && (
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ padding: "4px 8px", fontSize: 11, marginTop: 6 }}
+                                  onClick={() =>
+                                    setMatchLead({
+                                      id: String(l.id),
+                                      name: `${l.firstName} ${l.lastName}`,
+                                    })
+                                  }
+                                >
+                                  Link Customer ID →
+                                </button>
+                              )}
+                          </td>
+                          <td>
+                            <span
+                              className={`badge ${
+                                l.goodshowroomStatus === "synced"
+                                  ? "badge-green"
+                                  : "badge-blue"
+                              }`}
+                            >
+                              {String(l.goodshowroomStatus || "queued").replaceAll("_", " ")}
+                            </span>
+                            <small style={{ display: "block", color: "var(--muted)", marginTop: 2 }}>
+                              {String(l.goodshowroomDetail || "Sales Manager & General Manager queues")}
+                            </small>
+                          </td>
+                          <td>{date(l.createdAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <h4>No Leads Captured Yet</h4>
+                  <p>
+                    Landing-page enquiries will appear here automatically and immediately route to both CRMs.
+                  </p>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ------------------------------------------------------------- */}
+          {/* TAB 6: SUPPRESSION & OPT-OUT ENGINE                           */}
+          {/* ------------------------------------------------------------- */}
+          {tab === "Suppression" && (
+            <>
+              <section className="panel">
+                <div className="panel-header">
+                  <div>
+                    <h3>Real-Time ACMA Suppression Engine</h3>
+                    <p>
+                      Automated exclusion rules prevent further promotional SMS from reaching opted-out or registered customers.
+                    </p>
+                  </div>
+                  <span className="badge badge-green">CHECKED BEFORE EVERY SEND</span>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 20 }}>
+                  <div style={{ padding: 14, background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)" }}>
+                    <strong style={{ fontSize: 13, color: "var(--ink)", display: "block" }}>
+                      1. SMS "STOP" Reply
+                    </strong>
+                    <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--muted)" }}>
+                      Webhook instantly adds sender number to master suppression list.
+                    </p>
+                  </div>
+
+                  <div style={{ padding: 14, background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)" }}>
+                    <strong style={{ fontSize: 13, color: "var(--ink)", display: "block" }}>
+                      2. Web Unsubscribe
+                    </strong>
+                    <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--muted)" }}>
+                      One-click functional opt-out link embedded in every message.
+                    </p>
+                  </div>
+
+                  <div style={{ padding: 14, background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)" }}>
+                    <strong style={{ fontSize: 13, color: "var(--ink)", display: "block" }}>
+                      3. Lead Registration
+                    </strong>
+                    <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--muted)" }}>
+                      Successful enquiry submission immediately halts further marketing SMS.
+                    </p>
+                  </div>
+                </div>
+
+                {/* MANUAL QUARANTINE BOX */}
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const form = e.currentTarget;
+                    const rawMobile = new FormData(form).get("mobile");
+                    const result = await action("suppressions", { mobile: rawMobile });
+                    if (result) form.reset();
+                  }}
+                  style={{ display: "flex", gap: 12, alignItems: "flex-end" }}
+                >
+                  <label style={{ flex: 1, fontSize: 12, fontWeight: 600 }}>
+                    Manual Quarantine Add (Australian Mobile)
+                    <input
+                      name="mobile"
+                      placeholder="04xx xxx xxx or +614xx xxx xxx"
                       required
+                      style={{
+                        width: "100%",
+                        padding: "10px 14px",
+                        border: "1px solid var(--border)",
+                        borderRadius: 6,
+                        marginTop: 4,
+                        fontSize: 13,
+                      }}
                     />
                   </label>
-                  <button className="button primary" disabled={busy}>
-                    {busy ? "Signing in…" : "Sign in →"}
+                  <button
+                    disabled={busy || !canManage}
+                    className="btn btn-secondary"
+                    style={{ height: 42 }}
+                  >
+                    Add to Do-Not-Contact List
                   </button>
                 </form>
-                {notice && (
-                  <p className="error" role="alert">
-                    {notice}
+              </section>
+
+              {/* SUPPRESSION TABLE */}
+              <section className="panel">
+                <div className="panel-header">
+                  <div>
+                    <h3>
+                      Master Suppression List{" "}
+                      <span className="badge badge-red">{m.suppressed || 0} Excluded</span>
+                    </h3>
+                  </div>
+                </div>
+
+                {data?.suppressions?.length ? (
+                  <div className="table-container">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>MOBILE NUMBER</th>
+                          <th>SUPPRESSION REASON</th>
+                          <th>LOGGED TIMESTAMP</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.suppressions.map((s) => (
+                          <tr key={String(s.mobile)}>
+                            <td>
+                              <strong>{s.mobile}</strong>
+                            </td>
+                            <td>
+                              <span className="badge badge-red">{s.reason}</span>
+                            </td>
+                            <td>{date(s.createdAt)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <h4>No Numbers Suppressed Yet</h4>
+                    <p>Numbers that reply STOP or register a lead will appear here.</p>
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+
+          {/* ------------------------------------------------------------- */}
+          {/* TAB 7: INTEGRATIONS & SUBDOMAIN HUB                           */}
+          {/* ------------------------------------------------------------- */}
+          {tab === "Integrations" && (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20, marginBottom: 28 }}>
+                {/* 1. GOODSHOWROOM SUBDOMAIN CARD */}
+                <section className="panel" style={{ margin: 0 }}>
+                  <div className="panel-header">
+                    <div>
+                      <h3>GoodShowroom Subdomain & Embed</h3>
+                      <p>Dedicated branded customer landing experience.</p>
+                    </div>
+                    <span className="badge badge-green">SSL Verified</span>
+                  </div>
+
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>
+                      Subdomain Endpoint
+                    </label>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", marginTop: 2 }}>
+                      loyalty.smh.goodshowroom.com
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>
+                      Target Experience Embed
+                    </label>
+                    <div style={{ fontSize: 12, color: "var(--red)", marginTop: 2 }}>
+                      https://smh-loyalty-embed.netlify.app
+                    </div>
+                  </div>
+
+                  <div style={{ padding: "10px 12px", background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)", fontSize: 11, color: "var(--muted)" }}>
+                    Automated UTM parameters (<code>utm_source=sms</code>, <code>utm_campaign=loyalty</code>) appended to all tracked shortlinks.
+                  </div>
+                </section>
+
+                {/* 2. MOBILEMESSAGE SMS PROVIDER CARD */}
+                <section className="panel" style={{ margin: 0 }}>
+                  <div className="panel-header">
+                    <div>
+                      <h3>MobileMessage Verified SMS</h3>
+                      <p>ACMA-participating Australian telecommunications provider.</p>
+                    </div>
+                    <span className="badge badge-green">BooranSMH Registered</span>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>
+                        Registered Sender ID
+                      </label>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", marginTop: 2 }}>
+                        {String(data?.readiness?.senderId || "BooranSMH")}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>
+                        Sending Frequency Cap
+                      </label>
+                      <div style={{ fontSize: 12, color: "var(--ink)", marginTop: 2 }}>
+                        1 message / customer / 30 days
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    className="btn btn-secondary"
+                    disabled={busy || !canManage}
+                    style={{ width: "100%" }}
+                    onClick={async () => {
+                      setBusy(true);
+                      try {
+                        const result = await api("sms/test", {
+                          requestId: testRequestId || crypto.randomUUID(),
+                        });
+                        setNotice(`Connection-test status: ${result.status}.`);
+                      } catch (error) {
+                        setNotice((error as Error).message);
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    Send Telecommunications Test Ping
+                  </button>
+                </section>
+              </div>
+
+              {/* DEALERSOCKET CRM ROUTING SECTION */}
+              <section className="panel">
+                <div className="panel-header">
+                  <div>
+                    <h3>DealerSocket Lead Routing (Site ID: 10876)</h3>
+                    <p>Assign leads simultaneously to Primary Sales Manager and Secondary General Manager.</p>
+                  </div>
+                  <span className="badge badge-blue">South Morang Hyundai</span>
+                </div>
+
+                {routing ? (
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      await action("routing", {
+                        salesManager: routing.salesManager,
+                        generalManager: routing.generalManager,
+                      });
+                    }}
+                  >
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+                      <label style={{ fontSize: 12, fontWeight: 600 }}>
+                        Primary Assignee · Sales Manager
+                        <select
+                          required
+                          value={routing.salesManager}
+                          onChange={(e) =>
+                            setRouting({ ...routing, salesManager: e.target.value })
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            border: "1px solid var(--border)",
+                            borderRadius: 6,
+                            marginTop: 4,
+                          }}
+                        >
+                          <option value="">Select Sales Manager</option>
+                          {routing.catalog.users.map((u) => (
+                            <option key={u.value} value={u.value}>
+                              {u.text}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label style={{ fontSize: 12, fontWeight: 600 }}>
+                        Secondary Assignee · General Manager
+                        <select
+                          required
+                          value={routing.generalManager}
+                          onChange={(e) =>
+                            setRouting({ ...routing, generalManager: e.target.value })
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            border: "1px solid var(--border)",
+                            borderRadius: 6,
+                            marginTop: 4,
+                          }}
+                        >
+                          <option value="">Select General Manager</option>
+                          {routing.catalog.users.map((u) => (
+                            <option key={u.value} value={u.value}>
+                              {u.text}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    <button
+                      className="btn btn-primary"
+                      disabled={busy || !canManage}
+                    >
+                      Save CRM Manager Routing →
+                    </button>
+                  </form>
+                ) : (
+                  <p style={{ color: "var(--muted)", fontSize: 12 }}>
+                    Loading verified site assignees from DealerSocket catalog…
                   </p>
                 )}
               </section>
-            </div>
-          ) : (
-            <>
-              {notice && (
-                <div className="notice" role="status">
-                  {notice}
-                  <button aria-label="Dismiss" onClick={() => setNotice("")}>
-                    ×
-                  </button>
-                </div>
-              )}
-              {tab === "Overview" && <section className="panel workflow-summary"><p className="eyebrow">CLIENT CAMPAIGN WORKFLOW</p><h2>One invitation. One enquiry. Both CRMs.</h2><p>Consented audience → one-way SMS → loyalty landing page → enquiry form → DealerSocket + GoodShowroom Sales Floor.</p><small>Web unsubscribe or a successful enquiry immediately stops further loyalty SMS. Sales follow-up happens in the CRMs.</small></section>}
-              {(tab === "Overview" || tab === "Reports") && (
-                <>
-                  <div className="metrics">
-                    {[
-                      [
-                        "Eligible audience",
-                        m.eligible,
-                        "Consented & ready to reach",
-                        "♙",
-                      ],
-                      [
-                        "Messages sent",
-                        m.sent,
-                        `${m.delivered || 0} confirmed delivered`,
-                        "↗",
-                      ],
-                      ["Link visits", m.clicks, "Tracked campaign visits", "⌁"],
-                      [
-                        "Leads captured",
-                        m.leads,
-                        `${m.pending || 0} awaiting CRM delivery`,
-                        "⚑",
-                      ],
-                    ].map(([title, value, sub, icon]) => (
-                      <section className="metric" key={String(title)}>
-                        <div>
-                          <span>{title}</span>
-                          <span className="metric-icon">{icon}</span>
-                        </div>
-                        <strong>{Number(value || 0).toLocaleString()}</strong>
-                        <small>{sub}</small>
-                      </section>
-                    ))}
-                  </div>
-                  <div className="overview-grid">
-                    <section className="hero-card">
-                      <div className="hero-content">
-                        <span className="hero-tag">
-                          CUSTOMER LOYALTY, REIMAGINED
-                        </span>
-                        <h2>
-                          The next chapter
-                          <br />
-                          starts with a message.
-                        </h2>
-                        <p>
-                          Invite your Hyundai customers back with a personal
-                          offer and a seamless loyalty experience.
-                        </p>
-                        <button
-                          className="button white"
-                          onClick={() => setModal(true)}
-                        >
-                          Build your campaign <span>↗</span>
-                        </button>
-                      </div>
-                      <div className="hero-art" aria-hidden="true">
-                        <div className="orbit one" />
-                        <div className="orbit two" />
-                        <div className="message-art">
-                          <span className="art-logo">H</span>
-                          <b>
-                            A little thank you.
-                            <br />
-                            Just for you.
-                          </b>
-                          <span>Your Hyundai loyalty reward awaits.</span>
-                          <i>Explore your offer ↗</i>
-                        </div>
-                        <div className="floating-check">✓</div>
-                      </div>
-                      <span className="hero-foot">
-                        BOORAN SOUTH MORANG HYUNDAI
-                      </span>
-                    </section>
-                    <section className="panel readiness">
-                      <div className="section-heading">
-                        <h2>Launch readiness</h2>
-                        <Badge>9 NOV TARGET</Badge>
-                      </div>
-                      <p>Complete the checks below before enabling a campaign.</p>
-                      {[
-                        ["Audience uploaded", m.contacts > 0],
-                        [
-                          "Campaign copy approved",
-                          data!.campaigns.some((c) => c.approved),
-                        ],
-                        ["Mobile Message configured", data!.readiness.provider],
-                        [
-                          "Sender ID confirmed",
-                          data!.readiness.senderRegistered,
-                        ],
-                        ["Public HTTPS loyalty URL", data!.readiness.publicUrl],
-                        ["Delivery callbacks configured", data!.readiness.deliveryCallbacksConfigured],
-                        ["GoodShowroom connected", data!.readiness.goodshowroomStatus === "connected"],
-                      ].map(([label, ready]) => (
-                        <div className="check-row" key={String(label)}>
-                          <span className={`check ${ready ? "done" : ""}`}>
-                            {ready ? "✓" : "○"}
-                          </span>
-                          <span>{label}</span>
-                          <small>{ready ? "Ready" : "Pending"}</small>
-                        </div>
-                      ))}
-                      <button
-                        className="text-button"
-                        onClick={() => setTab("Integrations")}
-                      >
-                        View integrations <span>→</span>
-                      </button>
-                    </section>
-                  </div>
-                </>
-              )}
-              {(tab === "Overview" || tab === "Campaigns") && (
-                <section className="panel">
-                  <div className="section-heading">
-                    <div>
-                      <h2>
-                        Your campaigns{" "}
-                        <span className="count">{data!.campaigns.length}</span>
-                      </h2>
-                      <p>Meaningful outreach, managed in one place.</p>
-                    </div>
-                    <button
-                      className="text-button"
-                      onClick={() => setModal(true)}
-                    >
-                      Create campaign ＋
-                    </button>
-                  </div>
-                  {!data!.campaigns.length ? (
-                    <Empty
-                      title="Your next connection starts here"
-                      detail="Create your first loyalty campaign, import your consented audience, and prepare your message."
-                    />
-                  ) : (
-                    <div className="table-scroll">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>CAMPAIGN</th>
-                            <th>STATUS</th>
-                            <th>RECIPIENTS</th>
-                            <th>CREATED</th>
-                            <th>ACTION</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {data!.campaigns.map((c) => (
-                            <tr key={c.id}>
-                              <td>
-                                <strong>{c.name}</strong>
-                                <small>South Morang Hyundai · SMS</small>
-                              </td>
-                              <td>
-                                <Badge green={c.status === "completed"}>
-                                  {String(c.status).replaceAll("_", " ")}
-                                </Badge>
-                              </td>
-                              <td>{c.recipients}</td>
-                              <td>{date(c.createdAt)}</td>
-                              <td>
-                                {c.status === "draft" ? (
-                                  <button
-                                    disabled={busy}
-                                    className="text-button"
-                                    onClick={() => {
-                                      if (
-                                        window.confirm(
-                                          `Approve the final copy?\n\n${c.body}`,
-                                        )
-                                      )
-                                        void action(
-                                          `campaigns/${c.id}/approve`,
-                                        );
-                                    }}
-                                  >
-                                    Review & approve
-                                  </button>
-                                ) : c.status === "approved" ? (
-                                  <button
-                                    disabled={busy}
-                                    className="text-button"
-                                    onClick={() => {
-                                      if (
-                                        window.confirm(
-                                          "Send this campaign to every eligible recipient? This sends real SMS.",
-                                        )
-                                      )
-                                        void action(`campaigns/${c.id}/send`);
-                                    }}
-                                  >
-                                    Send campaign ↗
-                                  </button>
-                                ) : (
-                                  "—"
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </section>
-              )}
-              {tab === "Audience" && (
-                <>
-                  <section className="panel">
-                    <div className="section-heading">
-                      <div>
-                        <h2>Import your audience</h2>
-                        <p>
-                          CSV or XLSX columns: mobile, consent, evidence.
-                          Optional: firstName, lastName.
-                        </p>
-                      </div>
-                      <a
-                        className="button secondary"
-                        href="/audience-template.csv"
-                        download
-                      >
-                        ↓ CSV template
-                      </a>
-                    </div>
-                    <label className="upload-zone">
-                      <span>↑</span>
-                      <strong>Choose a customer list</strong>
-                      <small>
-                        CSV or XLSX · up to 10,000 records · Australian mobile
-                        numbers
-                      </small>
-                      <input
-                        type="file"
-                        accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        disabled={busy}
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) void importFile(f);
-                          e.target.value = "";
-                        }}
-                      />
-                    </label>
-                  </section>
-                  <section className="panel">
-                    <div className="section-heading">
-                      <h2>
-                        Customer audience{" "}
-                        <span className="count">{m.contacts}</span>
-                      </h2>
-                      <input
-                        className="search"
-                        aria-label="Search customers"
-                        placeholder="Search customers…"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                      />
-                    </div>
-                    {data!.contacts.length ? (
-                      <div className="table-scroll">
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>CUSTOMER</th>
-                              <th>MOBILE</th>
-                              <th>CONSENT</th>
-                              <th>STATUS</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filtered(data!.contacts).map((c) => (
-                              <tr key={c.id}>
-                                <td>
-                                  <strong>
-                                    {c.firstName} {c.lastName}
-                                  </strong>
-                                  <small>{c.evidence}</small>
-                                </td>
-                                <td>{c.mobile}</td>
-                                <td>{c.consent}</td>
-                                <td>
-                                  <Badge green={!c.suppressionReason}>
-                                    {c.suppressionReason || "Eligible"}
-                                  </Badge>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <Empty
-                        title="A fresh start for your audience"
-                        detail="Upload your consented list. Duplicate and invalid mobile numbers are checked automatically."
-                      />
-                    )}
-                  </section>
-                </>
-              )}
-              {tab === "Leads" && (
-                <section className="panel">
-                  <div className="section-heading">
-                    <div>
-                      <h2>Captured leads</h2>
-                      <p>
-                        Landing-page enquiries are delivered to each CRM independently. Registration immediately stops further campaign SMS.
-                      </p>
-                    </div>
-                    <Badge>{m.pendingDealerSocket || 0} pending DealerSocket · {m.pendingGoodshowroom || 0} pending GoodShowroom</Badge>
-                  </div>
-                  {data!.leads.length ? (
-                    <div className="table-scroll">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>CUSTOMER</th>
-                            <th>CONTACT</th>
-                            <th>DEALERSOCKET</th><th>GOODSHOWROOM SALES FLOOR</th>
-                            <th>REGISTERED</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {data!.leads.map((l) => (
-                            <tr key={l.id}>
-                              <td>
-                                <strong>
-                                  {l.firstName} {l.lastName}
-                                </strong>
-                              </td>
-                              <td>
-                                {l.mobile}
-                                <small>{l.email}</small>
-                              </td>
-                              <td>
-                                <Badge>
-                                  {String(l.crmStatus).replaceAll("_", " ")}
-                                </Badge>
-                                <small>{l.crmDetail}</small>
-                                {!l.dealerSocketContactId &&
-                                  [
-                                    "pending_configuration",
-                                    "needs_match",
-                                  ].includes(String(l.crmStatus)) && (
-                                    <button
-                                      className="text-button"
-                                      style={{ marginTop: 10 }}
-                                      onClick={() => {
-                                        const contactId = window.prompt(
-                                          "Matching DealerSocket customer ID. The customer mobile will be checked before any save.",
-                                        );
-                                        if (contactId)
-                                          void action(
-                                            `leads/${l.id}/customer`,
-                                            { contactId },
-                                          );
-                                      }}
-                                    >
-                                      Link existing customer →
-                                    </button>
-                                  )}
-                              </td>
-                              <td><Badge green={l.goodshowroomStatus === 'synced'}>{String(l.goodshowroomStatus || 'pending_configuration').replaceAll('_', ' ')}</Badge><small>{String(l.goodshowroomDetail || 'It will be integrated soon')}</small></td>
-                              <td>{date(l.createdAt)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <Empty
-                      title="Ready for the first enquiry"
-                      detail="Leads appear here when the loyalty experience submits a registration to the campaign webhook."
-                    />
-                  )}
-                </section>
-              )}
-              {tab === "Suppression" && (
-                <>
-                  <section className="panel">
-                    <div className="section-heading">
-                      <div>
-                        <h2>Protect customer preferences</h2>
-                        <p>
-                          Web opt-outs and landing-page enquiries stop further campaign messages automatically.
-                        </p>
-                      </div>
-                      <Badge green>CHECKED BEFORE EVERY SEND</Badge>
-                    </div>
-                    <form
-                      className="inline-form"
-                      onSubmit={async (e) => {
-                        e.preventDefault();
-                        const form = e.currentTarget;
-                        const result = await action("suppressions", {
-                          mobile: new FormData(form).get("mobile"),
-                        });
-                        if (result) form.reset();
-                      }}
-                    >
-                      <label>
-                        Australian mobile
-                        <input
-                          name="mobile"
-                          placeholder="04xx xxx xxx"
-                          required
-                        />
-                      </label>
-                      <button disabled={busy} className="button primary">
-                        Add to suppression list
-                      </button>
-                    </form>
-                  </section>
-                  <section className="panel">
-                    <div className="section-heading">
-                      <h2>
-                        Suppressed numbers{" "}
-                        <span className="count">{m.suppressed}</span>
-                      </h2>
-                    </div>
-                    {data!.suppressions.length ? (
-                      <div className="table-scroll">
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>MOBILE</th>
-                              <th>REASON</th>
-                              <th>ADDED</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {data!.suppressions.map((s) => (
-                              <tr key={s.mobile}>
-                                <td>{s.mobile}</td>
-                                <td>{s.reason}</td>
-                                <td>{date(s.createdAt)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <Empty
-                        title="No suppressed numbers yet"
-                        detail="Opt-outs and lead registrations are retained across every campaign."
-                      />
-                    )}
-                  </section>
-                </>
-              )}
-              {tab === "Integrations" && (
-                <>
-                  <div className="integration-grid">
-                    <section className="panel integration">
-                      <span className="integration-logo red">M•</span>
-                      <Badge green={Boolean(data!.readiness.provider)}>
-                        {data!.readiness.provider
-                          ? "Configured"
-                          : "Needs credentials"}
-                      </Badge>
-                      <h2>Mobile Message</h2>
-                      <p>
-                        One-way loyalty invitations with a tracked landing-page link, web unsubscribe and delivery receipts. Replies are not an enquiry channel.
-                      </p>
-                      <small>
-                        {String(data!.readiness.frequencyPolicy || "")}
-                      </small>
-                      <dl>
-                        <div>
-                          <dt>Sender</dt>
-                          <dd>{String(data!.readiness.senderId)}</dd>
-                        </div>
-                        <div>
-                          <dt>Live sending</dt>
-                          <dd>
-                            {data!.readiness.sendingEnabled
-                              ? "Enabled"
-                              : "Disabled"}
-                          </dd>
-                        </div>
-                      </dl>
-                      {oneWay && !data!.readiness.publicUrl && <p>Configure the public HTTPS loyalty URL before testing the full SMS and web unsubscribe journey.</p>}
-                      <p>Test recipient: {String(data!.readiness.testRecipient || 'Not configured')}. Test messages do not launch a campaign.</p>
-                      <button className="button secondary" disabled={busy || !data!.readiness.testSendingEnabled || (oneWay && !data!.readiness.publicUrl)}
-                        onClick={async () => {
-                          if (!window.confirm(`Send one connection-test SMS to ${data!.readiness.testRecipient}?`)) return;
-                          setBusy(true);
-                          const requestId = testRequestId || crypto.randomUUID();
-                          setTestRequestId(requestId);
-                          try {
-                            const result = await api('sms/test', { requestId });
-                            setNotice(`Test SMS status: ${result.status}. Unknown means check with the provider before another attempt.`);
-                            setSms(await api('sms/outbound'));
-                          } catch (error) { setNotice((error as Error).message); }
-                          finally { setBusy(false); }
-                        }}>Send connection test</button>
-                      <button className="button secondary" disabled={busy} onClick={async () => {
-                        setBusy(true);
-                        try { setSms(await api('sms/outbound')); setNotice('Outbound SMS status refreshed. Enquiries come from the landing-page form.'); }
-                        catch (error) { setNotice((error as Error).message); }
-                        finally { setBusy(false); }
-                      }}>Refresh delivery history</button>
-                      {sms && <div style={{ marginTop: 16 }}>
-                        <h3>Recent test messages</h3>
-                        {sms.tests.length === 0 && <p>No test messages yet.</p>}
-                        {sms.tests.map(row => <p key={String(row.id)}>{String(row.recipient)} · {String(row.status)} · {date(row.createdAt)}</p>)}
-                        <h3>Campaign delivery history</h3>
-                        {!sms.messages?.length && <p>No campaign messages sent yet.</p>}
-                        {sms.messages?.map(row => <p key={String(row.id)}>{String(row.mobile)} · {String(row.status)} · {date(row.createdAt)}</p>)}
-                      </div>}
-                      <button
-                        className="button secondary"
-                        disabled={busy}
-                        onClick={async () => {
-                          try {
-                            const result = await api("provider");
-                            setSenders(result.results || []);
-                            setNotice(
-                              "Mobile Message connection verified. Available senders are shown below.",
-                            );
-                          } catch (error) {
-                            setNotice((error as Error).message);
-                          }
-                        }}
-                      >
-                        Check approved senders ↗
-                      </button>
-                      {senders.length > 0 && (
-                        <label style={{ marginTop: 18 }}>
-                          Available account senders
-                          <select
-                            aria-label="Available account senders"
-                            defaultValue=""
-                          >
-                            <option value="" disabled>
-                              View approved senders
-                            </option>
-                            {senders.map((s) => (
-                              <option key={s.sender} value={s.sender}>
-                                {s.label || s.sender} · {s.type}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-                    </section>
-                    <section className="panel integration">
-                      <span className="integration-logo dark">DS</span>
-                      <Badge>
-                        {dealer?.session?.state ||
-                          (data!.readiness.dealerSocket
-                            ? "Configured"
-                            : "Not connected")}
-                      </Badge>
-                      <h2>DealerSocket</h2>
-                      <p>
-                        {dealer?.session?.message ||
-                          "Read CRM leads using your existing authenticated browser connector."}
-                      </p>
-                      <div className="integration-actions">
-                        <button
-                          className="button secondary"
-                          disabled={busy}
-                          onClick={async () => {
-                            try {
-                              setDealer(await api("dealersocket"));
-                            } catch (error) {
-                              setNotice((error as Error).message);
-                            }
-                          }}
-                        >
-                          Check connection
-                        </button>
-                        {data!.readiness.dealerSocketMode !== "chrome" && (
-                          <button
-                            className="text-button"
-                            disabled={busy}
-                            onClick={() => void action("dealersocket/login")}
-                          >
-                            Sign in
-                          </button>
-                        )}
-                        <button
-                          className="text-button"
-                          disabled={busy}
-                          onClick={() => void action("dealersocket/sync")}
-                        >
-                          Refresh leads ↻
-                        </button>
-                      </div>
-                      <small>
-                        Sales Manager and General Manager routing is configured
-                        below. {data!.readiness.crmWritesEnabled ? "Landing-page enquiry delivery is enabled." : "Enquiry delivery is paused until CRM writing is enabled."}
-                      </small>
-                    </section>
-                    <section className="panel integration">
-                      <span className="integration-logo cream">G</span>
-                      <Badge>Awaiting connection</Badge>
-                      <h2>GoodShowroom Sales Floor</h2>
-                      <p>It will be integrated soon</p><small>Form enquiries are retained for delivery to the Sales Manager and General Manager instances once access is configured.</small>
-                    </section>
-                  </div>
-                  {routing && (
-                    <section className="panel">
-                      <div className="section-heading">
-                        <div>
-                          <h2>Lead routing · South Morang Hyundai</h2>
-                          <p>
-                            One opportunity, shared with both managers.
-                            DealerSocket uses Primary and Secondary assignees.
-                          </p>
-                        </div>
-                        <Badge>DEALERSHIP 10876</Badge>
-                      </div>
-                      <form
-                        onSubmit={async (e) => {
-                          e.preventDefault();
-                          await action("routing", {
-                            salesManager: routing.salesManager,
-                            generalManager: routing.generalManager,
-                          });
-                        }}
-                      >
-                        <div className="routing-fields">
-                          <label>
-                            Sales Manager · Primary
-                            <select
-                              required
-                              value={routing.salesManager}
-                              onChange={(e) =>
-                                setRouting({
-                                  ...routing,
-                                  salesManager: e.target.value,
-                                })
-                              }
-                            >
-                              <option value="">Select Sales Manager</option>
-                              {routing.catalog.users.map((u) => (
-                                <option key={u.value} value={u.value}>
-                                  {u.text}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            General Manager · Secondary
-                            <select
-                              required
-                              value={routing.generalManager}
-                              onChange={(e) =>
-                                setRouting({
-                                  ...routing,
-                                  generalManager: e.target.value,
-                                })
-                              }
-                            >
-                              <option value="">Select General Manager</option>
-                              {routing.catalog.users.map((u) => (
-                                <option key={u.value} value={u.value}>
-                                  {u.text}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        </div>
-                        <div className="modal-footer">
-                          <span className="muted">
-                            Assignee options verified from the live South Morang
-                            Hyundai form.
-                          </span>
-                          <button className="button primary" disabled={busy}>
-                            Save routing →
-                          </button>
-                        </div>
-                      </form>
-                    </section>
-                  )}
-                  {dealer?.snapshot && (
-                    <section className="panel">
-                      <div className="section-heading">
-                        <h2>DealerSocket snapshot</h2>
-                        <Badge>{dealer.snapshot.state || "No snapshot"}</Badge>
-                      </div>
-                      <p className="muted">
-                        Observed {date(dealer.snapshot.fetchedAt)} ·{" "}
-                        {dealer.snapshot.records?.length || 0} records. CRM
-                        records do not establish SMS consent.
-                      </p>
-                      <p>{dealer.snapshot.coverageNote}</p>
-                      {dealer.snapshot.records?.length ? (
-                        <div className="table-scroll">
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>CUSTOMER</th>
-                                <th>ROOFTOP</th>
-                                <th>ASSIGNED TO</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {dealer.snapshot.records
-                                .slice(0, 100)
-                                .map((r, i) => (
-                                  <tr key={i}>
-                                    <td>
-                                      {r.first_name ||
-                                        r.customer_name ||
-                                        "Customer"}{" "}
-                                      {r.last_name}
-                                    </td>
-                                    <td>{r.rooftop}</td>
-                                    <td>{r.assigned_salesperson || "—"}</td>
-                                  </tr>
-                                ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : null}
-                    </section>
-                  )}
-                </>
-              )}
-              {(tab === "Overview" || tab === "Reports") && (
-                <div className="bottom-grid">
-                  <section className="panel">
-                    <div className="section-heading">
-                      <h2>Recent activity</h2>
-                      <span className="muted">Campaign audit trail</span>
-                    </div>
-                    {data!.activity.length ? (
-                      <div className="activity-list">
-                        {data!.activity.slice(0, 8).map((a) => (
-                          <div className="activity-item" key={a.id}>
-                            <span className="activity-dot" />
-                            <div>
-                              <strong>{a.action}</strong>
-                              <p>{a.detail}</p>
-                            </div>
-                            <time>{date(a.createdAt)}</time>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <Empty
-                        title="A clear trail, from the start"
-                        detail="Imports, approvals, registrations and sends will be recorded here."
-                      />
-                    )}
-                  </section>
-                  <section className="panel journey">
-                    <p className="eyebrow">BUILT FOR BETTER CONNECTIONS</p>
-                    <h2>
-                      A simple path back
-                      <br />
-                      to your showroom.
-                    </h2>
-                    {[
-                      "Send one-way SMS to a consented audience",
-                      "Customer opens the loyalty link",
-                      "Customer submits the enquiry form",
-                      "Route to DealerSocket and GoodShowroom Sales Floor",
-                      "Suppress further SMS; sales team follows up",
-                    ].map((step, i) => (
-                      <div className="journey-step" key={step}>
-                        <span>0{i + 1}</span>
-                        {step}
-                      </div>
-                    ))}
-                  </section>
-                </div>
-              )}
-              {tab === "Reports" && (
-                <section className="panel">
-                  <div className="section-heading">
-                    <div>
-                      <h2>Campaign performance</h2>
-                      <p>
-                        Actual campaign totals. Link visits include repeat
-                        visits.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="report-grid">
-                    {[
-                      ["Delivered", m.delivered || 0],
-                      ["Opt-outs", m.optOuts || 0],
-                      ["Leads registered", m.leads || 0],
-                      ["Suppressed numbers", m.suppressed || 0],
-                    ].map(([label, value]) => (
-                      <div key={label}>
-                        <span>{label}</span>
-                        <strong>{value}</strong>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
-              <footer>
-                <span>© {new Date().getFullYear()} Booran Motors Group</span>
-                <span>Customer loyalty, thoughtfully connected.</span>
-                <button
-                  className="text-button"
-                  onClick={async () => {
-                    await api("logout", {});
-                    setSigned(false);
-                    setData(null);
-                  }}
-                >
-                  Sign out ↗
-                </button>
-              </footer>
             </>
+          )}
+
+          {/* ------------------------------------------------------------- */}
+          {/* TAB 8: REPORTS                                                */}
+          {/* ------------------------------------------------------------- */}
+          {tab === "Reports" && (
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <h3>Campaign Performance & Conversion Funnel</h3>
+                  <p>Real-time delivery confirmation and audience engagement metrics.</p>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+                <div style={{ padding: 18, background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)" }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>
+                    Delivery Rate
+                  </span>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: "var(--ink)", marginTop: 6 }}>
+                    {m.sent ? Math.round(((m.delivered || 0) / m.sent) * 100) : 100}%
+                  </div>
+                  <small style={{ color: "var(--muted)", fontSize: 10 }}>Confirmed carrier receipts</small>
+                </div>
+
+                <div style={{ padding: 18, background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)" }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>
+                    Click-Through Rate (CTR)
+                  </span>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: "var(--ink)", marginTop: 6 }}>
+                    {m.delivered ? Math.round(((m.clicks || 0) / m.delivered) * 100) : 0}%
+                  </div>
+                  <small style={{ color: "var(--muted)", fontSize: 10 }}>Tracked landing visits</small>
+                </div>
+
+                <div style={{ padding: 18, background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)" }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>
+                    Lead Conversion
+                  </span>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: "var(--ink)", marginTop: 6 }}>
+                    {m.clicks ? Math.round(((m.leads || 0) / m.clicks) * 100) : 0}%
+                  </div>
+                  <small style={{ color: "var(--muted)", fontSize: 10 }}>Form submissions / visits</small>
+                </div>
+
+                <div style={{ padding: 18, background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)" }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>
+                    Opt-Out Rate
+                  </span>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: "#991b1b", marginTop: 6 }}>
+                    {m.delivered ? ((m.optOuts || 0) / m.delivered * 100).toFixed(1) : 0}%
+                  </div>
+                  <small style={{ color: "var(--muted)", fontSize: 10 }}>STOP & web unsubscribes</small>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ------------------------------------------------------------- */}
+          {/* TABS: OPERATIONS, SETTINGS, STAFF (VIA PRODUCTIONPANELS)      */}
+          {/* ------------------------------------------------------------- */}
+          {["Operations", "Settings", "Staff"].includes(tab) && user && (
+            <ProductionPanels
+              tab={tab}
+              api={api}
+              user={user}
+              onUpdated={refresh}
+            />
           )}
         </main>
       </div>
-      {modal && signed && (
+
+      {/* ------------------------------------------------------------- */}
+      {/* TAB 3 MODAL: 7 SCOPE SMS TEMPLATES & TELEMETRY                */}
+      {/* ------------------------------------------------------------- */}
+      {modal && (
         <div className="modal-overlay" onClick={() => setModal(false)}>
-          <section
-            className="modal panel"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="campaign-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="section-heading">
-              <h2 id="campaign-title">Create a loyalty campaign</h2>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+              <div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px 0", color: "var(--ink)" }}>
+                  Create Verified Loyalty Campaign
+                </h3>
+                <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>
+                  Select from the 7 client-approved templates from Scope Section 5.
+                </p>
+              </div>
               <button
-                className="icon-button"
-                aria-label="Close dialog"
+                style={{ background: "none", border: "none", fontSize: 20, color: "var(--muted)" }}
                 onClick={() => setModal(false)}
               >
                 ×
               </button>
             </div>
+
+            {/* TEMPLATE PICKER GRID */}
+            <div className="template-grid">
+              {SCOPE_TEMPLATES.map((tmpl) => (
+                <div
+                  key={tmpl.id}
+                  className={`template-item ${
+                    selectedTemplate.id === tmpl.id ? "selected" : ""
+                  }`}
+                  onClick={() => {
+                    setSelectedTemplate(tmpl);
+                    setCampaignBody(tmpl.body);
+                  }}
+                >
+                  <div className="template-item-top">
+                    <span className="template-item-title">{tmpl.name}</span>
+                    <span
+                      className={`badge ${
+                        tmpl.recommended ? "badge-green" : "badge-blue"
+                      }`}
+                    >
+                      {tmpl.badge}
+                    </span>
+                  </div>
+                  <p className="template-item-desc">{tmpl.description}</p>
+                  <div className="template-item-preview">{tmpl.body}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* CAMPAIGN FORM */}
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
                 const result = await action("campaigns", {
-                  name: new FormData(e.currentTarget).get("name"),
-                  body: copy,
+                  name: campaignName,
+                  body: campaignBody,
                 });
                 if (result) {
                   setModal(false);
@@ -1199,54 +1720,185 @@ export default function Home() {
                 }
               }}
             >
-              <label>
-                Campaign name
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
+                Campaign Reference Name
                 <input
-                  name="name"
-                  placeholder="November loyalty invitation"
+                  value={campaignName}
+                  onChange={(e) => setCampaignName(e.target.value)}
+                  placeholder="e.g. November Loyalty Re-engagement"
                   maxLength={200}
                   required
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid var(--border)",
+                    borderRadius: 6,
+                    marginTop: 4,
+                  }}
                 />
               </label>
-              <label>
-                Message
+
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, margin: "14px 0 8px" }}>
+                SMS Message Body (must identify Booran and include {"{link}"} and {"{optout}"})
                 <textarea
-                  value={copy}
-                  onChange={(e) => setCopy(e.target.value)}
-                  rows={5}
+                  value={campaignBody}
+                  onChange={(e) => setCampaignBody(e.target.value)}
+                  rows={4}
                   maxLength={1000}
                   required
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid var(--border)",
+                    borderRadius: 6,
+                    marginTop: 4,
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 12,
+                  }}
                 />
               </label>
-              <p className="field-help">
-                Use {"{firstName}"} to personalise, {"{link}"} for tracking, and{" "}
-                {"{optout}"} for the web unsubscribe link. One-way SMS does not ask customers to reply. Unicode can increase
-                SMS parts.
-              </p>
-              <div className="sms-preview">
-                <span>MESSAGE PREVIEW</span>
-                <p>
-                  {copy
-                    .replaceAll("{firstName}", "Alex")
-                    .replaceAll("{link}", "https://your-domain/r/…")
-                    .replaceAll("{optout}", "Opt out: https://your-domain/unsubscribe/…")}
-                </p>
+
+              {/* REAL-TIME TELEMETRY BAR */}
+              <div className="telemetry-row">
+                <div>
+                  <strong style={{ color: "var(--ink)" }}>
+                    {telemetry.renderedLength} characters
+                  </strong>
+                  <span style={{ color: "var(--muted)", marginLeft: 6 }}>
+                    ({telemetry.rawLength} template chars)
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", gap: 8 }}>
+                  <span
+                    className={`badge ${
+                      telemetry.segments === 1 ? "badge-green" : "badge-amber"
+                    }`}
+                  >
+                    {telemetry.segments === 1
+                      ? "1 Segment (Single-Part Cost)"
+                      : `${telemetry.segments} Segments (Multi-Part)`}
+                  </span>
+
+                  <span
+                    className={`badge ${
+                      telemetry.isUnicode ? "badge-amber" : "badge-blue"
+                    }`}
+                  >
+                    {telemetry.isUnicode ? "Unicode Mode" : "Standard GSM-7"}
+                  </span>
+                </div>
               </div>
-              <div className="modal-footer">
-                <span className="muted">
-                  {copy.length} template characters · draft only
+
+              {/* LIVE SMARTPHONE MESSAGE PREVIEW BUBBLE */}
+              <div className="phone-preview-shell">
+                <div className="phone-preview-header">
+                  <span>Simulated Handset Preview</span>
+                  <span>Sender ID: BooranSMH</span>
+                </div>
+
+                <div className="phone-preview-bubble">
+                  <span className="bubble-sender">BooranSMH</span>
+                  {telemetry.renderedText}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginTop: 20,
+                  paddingTop: 16,
+                  borderTop: "1px solid var(--border)",
+                }}
+              >
+                <span style={{ fontSize: 11, color: "var(--muted)" }}>
+                  Client copy approval required before live broadcast.
                 </span>
-                <button disabled={busy} className="button primary">
-                  Save campaign →
+
+                <button
+                  type="submit"
+                  disabled={busy || !canManage}
+                  className="btn btn-primary"
+                >
+                  Save Campaign Draft →
                 </button>
               </div>
             </form>
-          </section>
+          </div>
+        </div>
+      )}
+
+      {/* RESOLUTION MODAL FOR needs_match (NO RAW WINDOW.PROMPT) */}
+      {matchLead && (
+        <div className="modal-overlay" onClick={() => setMatchLead(null)}>
+          <div className="modal-dialog" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
+                Link DealerSocket Customer
+              </h3>
+              <button
+                style={{ background: "none", border: "none", fontSize: 18 }}
+                onClick={() => setMatchLead(null)}
+              >
+                ×
+              </button>
+            </div>
+
+            <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 16px 0" }}>
+              Enter the confirmed DealerSocket Contact ID for <strong>{matchLead.name}</strong>. The worker will verify the phone number matches before saving.
+            </p>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                await action(`leads/${matchLead.id}/customer`, {
+                  contactId: matchContactId,
+                });
+                setMatchLead(null);
+                setMatchContactId("");
+              }}
+            >
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 14 }}>
+                DealerSocket Customer ID (numeric)
+                <input
+                  type="text"
+                  placeholder="e.g. 543210"
+                  pattern="\d+"
+                  value={matchContactId}
+                  onChange={(e) => setMatchContactId(e.target.value)}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    border: "1px solid var(--border)",
+                    borderRadius: 6,
+                    marginTop: 4,
+                  }}
+                />
+              </label>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setMatchLead(null)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={busy}>
+                  Save Match
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
   );
 }
+
 function parseCSV(source: string) {
   const records: string[][] = [];
   let record: string[] = [],
@@ -1278,6 +1930,6 @@ function parseCSV(source: string) {
   if (!["mobile", "consent", "evidence"].every((h) => headers.includes(h)))
     throw new Error("CSV requires mobile, consent and evidence columns.");
   return records.map((row) =>
-    Object.fromEntries(headers.map((h, i) => [h, row[i] || ""])),
+    Object.fromEntries(headers.map((h, i) => [h, row[i] || ""]))
   );
 }
