@@ -298,7 +298,11 @@ export default function Home() {
       <div className="login-gate-wrapper">
         <div className="login-card">
           <div className="login-header">
-            <div className="login-badge">H</div>
+            <img
+              src="/booran-motors-black.png"
+              alt="Booran Motors"
+              className="login-logo"
+            />
             <div className="login-title">
               <h1>Booran South Morang Hyundai</h1>
               <p>Loyalty Campaign Studio</p>
@@ -381,7 +385,11 @@ export default function Home() {
       <div className="login-gate-wrapper">
         <div className="login-card">
           <div className="login-header">
-            <div className="login-badge">H</div>
+            <img
+              src="/booran-motors-black.png"
+              alt="Booran Motors"
+              className="login-logo"
+            />
             <div className="login-title">
               <h1>Booran South Morang Hyundai</h1>
               <p>Security Requirement</p>
@@ -466,9 +474,13 @@ export default function Home() {
       {/* ------------------------------------------------------------- */}
       <aside className="sidebar">
         <a className="brand" href="/">
-          <div className="brand-badge">H</div>
+          <img
+            src="/booran-motors-black.png"
+            alt="Booran Motors"
+            className="brand-logo"
+          />
           <div className="brand-text">
-            <h1>Booran South Morang Hyundai</h1>
+            <h1>South Morang Hyundai</h1>
             <p>Loyalty Campaign Studio</p>
           </div>
         </a>

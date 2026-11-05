@@ -10,8 +10,13 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "Booran • Loyalty Studio",
+  title: "Booran South Morang Hyundai • Loyalty Studio",
   description: "South Morang Hyundai campaign operations",
+  icons: {
+    icon: "/booran-motors-black.png",
+    shortcut: "/booran-motors-black.png",
+    apple: "/booran-motors-black.png",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

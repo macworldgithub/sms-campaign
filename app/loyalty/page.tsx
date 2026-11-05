@@ -38,8 +38,26 @@ export default function LoyaltyExperience({
   return (
     <Suspense
       fallback={
-        <div style={{ padding: 40, color: "#e22837" }}>
-          Opening your Hyundai loyalty experience…
+        <div
+          style={{
+            padding: 40,
+            minHeight: "100vh",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 16,
+            background: "#ffffff",
+          }}
+        >
+          <img
+            src="/booran-motors-black.png"
+            alt="Booran Motors"
+            style={{ height: 42, width: "auto", objectFit: "contain" }}
+          />
+          <span style={{ fontSize: 14, fontWeight: 500, color: "#475467" }}>
+            Opening your South Morang Hyundai loyalty experience…
+          </span>
         </div>
       }
     >
