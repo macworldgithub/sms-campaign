@@ -88,7 +88,7 @@ async function handler(
   }
   const endpoint = path.join("/");
   if (
-    !/^(portal|routing|sms\/(?:test|inbox(?:\/sync)?|activity\/[\w-]+\/customer)|leads\/[\w-]+\/customer|contacts\/import(?:-workbook)?|suppressions|campaigns(?:\/[\w-]+\/(?:approve|send))?|dealersocket(?:\/(?:check|login|sync))?|provider)$/.test(
+    !/^(portal|routing|sms\/(?:test|outbound|inbox(?:\/sync)?|activity\/[\w-]+\/customer)|leads\/[\w-]+\/customer|contacts\/import(?:-workbook)?|suppressions|campaigns(?:\/[\w-]+\/(?:approve|send))?|dealersocket(?:\/(?:check|login|sync))?|provider)$/.test(
       endpoint,
     )
   )

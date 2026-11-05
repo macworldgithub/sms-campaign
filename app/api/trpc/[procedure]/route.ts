@@ -115,6 +115,8 @@ export async function POST(
           email,
           mobile,
           token,
+          contactConsent: true,
+          existingCustomer: true,
         }),
         signal: AbortSignal.timeout(15000),
       },

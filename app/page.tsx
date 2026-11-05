@@ -77,7 +77,7 @@ export default function Home() {
   const [senders, setSenders] = useState<
     { sender: string; label?: string; type: string }[]
   >([]);
-  const [sms, setSms] = useState<{ results: Row[]; tests: Row[]; activities: Row[] } | null>(null);
+  const [sms, setSms] = useState<{ tests: Row[]; messages?: Row[] } | null>(null);
   const [testRequestId, setTestRequestId] = useState<string | null>(null);
   const api = useCallback(async (path: string, body?: unknown) => {
     const response = await fetch(`/api/portal/${path}`, {
@@ -122,6 +122,13 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [signed, tab, api]);
   useEffect(() => {
+    if (!signed || tab !== "Integrations") return;
+    const load = () => void api("sms/outbound").then(setSms).catch(() => {});
+    load();
+    const timer = setInterval(load, 15000);
+    return () => clearInterval(timer);
+  }, [signed, tab, api]);
+  useEffect(() => {
     if (!signed) return;
     const timer = setInterval(() => void refresh(), 30000);
     return () => clearInterval(timer);
@@ -160,6 +167,7 @@ export default function Home() {
     }
   }
   const m = data?.metrics || {};
+  const oneWay = data?.readiness.smsChannelMode !== "two_way";
   const filtered = (rows: Row[]) =>
     rows.filter((r) =>
       Object.values(r).join(" ").toLowerCase().includes(query.toLowerCase()),
@@ -343,6 +351,7 @@ export default function Home() {
                   </button>
                 </div>
               )}
+              {tab === "Overview" && <section className="panel workflow-summary"><p className="eyebrow">CLIENT CAMPAIGN WORKFLOW</p><h2>One invitation. One enquiry. Both CRMs.</h2><p>Consented audience → one-way SMS → loyalty landing page → enquiry form → DealerSocket + GoodShowroom Sales Floor.</p><small>Web unsubscribe or a successful enquiry immediately stops further loyalty SMS. Sales follow-up happens in the CRMs.</small></section>}
               {(tab === "Overview" || tab === "Reports") && (
                 <>
                   <div className="metrics">
@@ -423,7 +432,7 @@ export default function Home() {
                         <h2>Launch readiness</h2>
                         <Badge>9 NOV TARGET</Badge>
                       </div>
-                      <p>Everything in place for a confident launch.</p>
+                      <p>Complete the checks below before enabling a campaign.</p>
                       {[
                         ["Audience uploaded", m.contacts > 0],
                         [
@@ -435,7 +444,9 @@ export default function Home() {
                           "Sender ID confirmed",
                           data!.readiness.senderRegistered,
                         ],
-                        ["Public tracking URL", data!.readiness.publicUrl],
+                        ["Public HTTPS loyalty URL", data!.readiness.publicUrl],
+                        ["Delivery callbacks configured", data!.readiness.deliveryCallbacksConfigured],
+                        ["GoodShowroom connected", data!.readiness.goodshowroomStatus === "connected"],
                       ].map(([label, ready]) => (
                         <div className="check-row" key={String(label)}>
                           <span className={`check ${ready ? "done" : ""}`}>
@@ -647,11 +658,10 @@ export default function Home() {
                     <div>
                       <h2>Captured leads</h2>
                       <p>
-                        Registration immediately suppresses further campaign
-                        messages.
+                        Landing-page enquiries are delivered to each CRM independently. Registration immediately stops further campaign SMS.
                       </p>
                     </div>
-                    <Badge>{m.pending || 0} PENDING CRM</Badge>
+                    <Badge>{m.pendingDealerSocket || 0} pending DealerSocket · {m.pendingGoodshowroom || 0} pending GoodShowroom</Badge>
                   </div>
                   {data!.leads.length ? (
                     <div className="table-scroll">
@@ -660,7 +670,7 @@ export default function Home() {
                           <tr>
                             <th>CUSTOMER</th>
                             <th>CONTACT</th>
-                            <th>CRM DELIVERY</th>
+                            <th>DEALERSOCKET</th><th>GOODSHOWROOM SALES FLOOR</th>
                             <th>REGISTERED</th>
                           </tr>
                         </thead>
@@ -704,6 +714,7 @@ export default function Home() {
                                     </button>
                                   )}
                               </td>
+                              <td><Badge green={l.goodshowroomStatus === 'synced'}>{String(l.goodshowroomStatus || 'pending_configuration').replaceAll('_', ' ')}</Badge><small>{String(l.goodshowroomDetail || 'It will be integrated soon')}</small></td>
                               <td>{date(l.createdAt)}</td>
                             </tr>
                           ))}
@@ -712,7 +723,7 @@ export default function Home() {
                     </div>
                   ) : (
                     <Empty
-                      title="Ready for the first conversation"
+                      title="Ready for the first enquiry"
                       detail="Leads appear here when the loyalty experience submits a registration to the campaign webhook."
                     />
                   )}
@@ -725,8 +736,7 @@ export default function Home() {
                       <div>
                         <h2>Protect customer preferences</h2>
                         <p>
-                          STOP replies and registrations are suppressed
-                          automatically.
+                          Web opt-outs and landing-page enquiries stop further campaign messages automatically.
                         </p>
                       </div>
                       <Badge green>CHECKED BEFORE EVERY SEND</Badge>
@@ -804,8 +814,7 @@ export default function Home() {
                       </Badge>
                       <h2>Mobile Message</h2>
                       <p>
-                        Verified SMS, automatic opt-out instructions and
-                        delivery receipts.
+                        One-way loyalty invitations with a tracked landing-page link, web unsubscribe and delivery receipts. Replies are not an enquiry channel.
                       </p>
                       <small>
                         {String(data!.readiness.frequencyPolicy || "")}
@@ -824,8 +833,9 @@ export default function Home() {
                           </dd>
                         </div>
                       </dl>
+                      {oneWay && !data!.readiness.publicUrl && <p>Configure the public HTTPS loyalty URL before testing the full SMS and web unsubscribe journey.</p>}
                       <p>Test recipient: {String(data!.readiness.testRecipient || 'Not configured')}. Test messages do not launch a campaign.</p>
-                      <button className="button secondary" disabled={busy || !data!.readiness.testSendingEnabled}
+                      <button className="button secondary" disabled={busy || !data!.readiness.testSendingEnabled || (oneWay && !data!.readiness.publicUrl)}
                         onClick={async () => {
                           if (!window.confirm(`Send one connection-test SMS to ${data!.readiness.testRecipient}?`)) return;
                           setBusy(true);
@@ -834,38 +844,23 @@ export default function Home() {
                           try {
                             const result = await api('sms/test', { requestId });
                             setNotice(`Test SMS status: ${result.status}. Unknown means check with the provider before another attempt.`);
-                            setSms(await api('sms/inbox'));
+                            setSms(await api('sms/outbound'));
                           } catch (error) { setNotice((error as Error).message); }
                           finally { setBusy(false); }
                         }}>Send connection test</button>
                       <button className="button secondary" disabled={busy} onClick={async () => {
                         setBusy(true);
-                        try { const result = await api('sms/inbox/sync', {}); setSms(result); setNotice(result.truncated ? 'Showing a bounded reply history; additional records remain with the provider.' : 'Replies refreshed for the configured sender.'); }
+                        try { setSms(await api('sms/outbound')); setNotice('Outbound SMS status refreshed. Enquiries come from the landing-page form.'); }
                         catch (error) { setNotice((error as Error).message); }
                         finally { setBusy(false); }
-                      }}>Refresh SMS replies</button>
+                      }}>Refresh delivery history</button>
                       {sms && <div style={{ marginTop: 16 }}>
                         <h3>Recent test messages</h3>
                         {sms.tests.length === 0 && <p>No test messages yet.</p>}
                         {sms.tests.map(row => <p key={String(row.id)}>{String(row.recipient)} · {String(row.status)} · {date(row.createdAt)}</p>)}
-                        <h3>SMS replies</h3>
-                        {sms.results.length === 0 && <p>No replies received for this sender.</p>}
-                        {sms.results.map(row => <p key={String(row.id)}><strong>{String(row.mobile)}</strong> · {date(row.receivedAt)}<br />{String(row.body)}</p>)}
-                        <h3>DealerSocket SMS activity</h3>
-                        <p>Only conversations linked to this portal's campaigns enter the CRM queue.</p>
-                        {sms.activities?.length === 0 && <p>No SMS activity jobs yet.</p>}
-                        {sms.activities?.map(row => <div key={String(row.id)}><p>{String(row.mobile)} · {String(row.direction)} · {String(row.status)}<br />{String(row.detail || '')}</p>
-                          {row.status === 'needs_match' && <button className="button secondary" disabled={busy} onClick={async () => {
-                            const contactId = window.prompt('Verified DealerSocket customer ID');
-                            if (!contactId) return;
-                            const opportunityId = window.prompt('Verified opportunity ID for that customer');
-                            if (!opportunityId) return;
-                            setBusy(true);
-                            try { await api(`sms/activity/${row.id}/customer`, { contactId, opportunityId }); setSms(await api('sms/inbox')); }
-                            catch (error) { setNotice((error as Error).message); }
-                            finally { setBusy(false); }
-                          }}>Link customer and opportunity</button>}
-                        </div>)}
+                        <h3>Campaign delivery history</h3>
+                        {!sms.messages?.length && <p>No campaign messages sent yet.</p>}
+                        {sms.messages?.map(row => <p key={String(row.id)}>{String(row.mobile)} · {String(row.status)} · {date(row.createdAt)}</p>)}
                       </div>}
                       <button
                         className="button secondary"
@@ -949,14 +944,14 @@ export default function Home() {
                       </div>
                       <small>
                         Sales Manager and General Manager routing is configured
-                        below. Live CRM writes remain disabled until tested.
+                        below. {data!.readiness.crmWritesEnabled ? "Landing-page enquiry delivery is enabled." : "Enquiry delivery is paused until CRM writing is enabled."}
                       </small>
                     </section>
                     <section className="panel integration">
                       <span className="integration-logo cream">G</span>
-                      <Badge>Coming soon</Badge>
-                      <h2>Goodshowroom</h2>
-                      <p>It will be integrated soon</p>
+                      <Badge>Awaiting connection</Badge>
+                      <h2>GoodShowroom Sales Floor</h2>
+                      <p>It will be integrated soon</p><small>Form enquiries are retained for delivery to the Sales Manager and General Manager instances once access is configured.</small>
                     </section>
                   </div>
                   {routing && (
@@ -1114,10 +1109,11 @@ export default function Home() {
                       to your showroom.
                     </h2>
                     {[
-                      "Reach your consented audience",
-                      "Explore the loyalty experience",
-                      "Register interest",
-                      "Start the next conversation",
+                      "Send one-way SMS to a consented audience",
+                      "Customer opens the loyalty link",
+                      "Customer submits the enquiry form",
+                      "Route to DealerSocket and GoodShowroom Sales Floor",
+                      "Suppress further SMS; sales team follows up",
                     ].map((step, i) => (
                       <div className="journey-step" key={step}>
                         <span>0{i + 1}</span>
@@ -1224,7 +1220,7 @@ export default function Home() {
               </label>
               <p className="field-help">
                 Use {"{firstName}"} to personalise, {"{link}"} for tracking, and{" "}
-                {"{optout}"} for unsubscribe instructions. Unicode can increase
+                {"{optout}"} for the web unsubscribe link. One-way SMS does not ask customers to reply. Unicode can increase
                 SMS parts.
               </p>
               <div className="sms-preview">
@@ -1233,7 +1229,7 @@ export default function Home() {
                   {copy
                     .replaceAll("{firstName}", "Alex")
                     .replaceAll("{link}", "https://your-domain/r/…")
-                    .replaceAll("{optout}", "Opt out: [provider instructions]")}
+                    .replaceAll("{optout}", "Opt out: https://your-domain/unsubscribe/…")}
                 </p>
               </div>
               <div className="modal-footer">
