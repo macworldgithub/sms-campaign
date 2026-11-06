@@ -655,24 +655,10 @@ export default function Home() {
           </div>
 
           {notice && (
-            <div
-              style={{
-                marginBottom: 24,
-                padding: "12px 18px",
-                background: "#f0fdf4",
-                border: "1px solid #bbf7d0",
-                borderRadius: 8,
-                color: "#166534",
-                fontSize: 13,
-                fontWeight: 500,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
+            <div className="notice-banner">
               <span>{notice}</span>
               <button
-                style={{ background: "none", border: "none", color: "#166534", fontWeight: 700 }}
+                style={{ background: "none", border: "none", color: "#166534", fontWeight: 700, fontSize: 16 }}
                 onClick={() => setNotice("")}
               >
                 ×
@@ -786,7 +772,7 @@ export default function Home() {
               </div>
 
               {/* CAMPAIGN LAUNCH READINESS CHECKLIST */}
-              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 24, marginBottom: 28 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1.25fr 0.75fr", gap: 24, marginBottom: 28 }}>
                 <section className="panel" style={{ margin: 0 }}>
                   <div className="panel-header">
                     <div>
@@ -796,7 +782,7 @@ export default function Home() {
                     <span className="badge badge-green">TARGET: 9 NOV</span>
                   </div>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     {[
                       ["Consented Target List Ingested", Number(m.contacts || 0) > 0],
                       [
@@ -827,17 +813,18 @@ export default function Home() {
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
-                          padding: "10px 14px",
+                          padding: "12px 16px",
                           background: "#f8fafc",
                           border: "1px solid var(--border)",
                           borderRadius: 8,
+                          gap: 12,
                         }}
                       >
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                           <span
                             style={{
-                              width: 20,
-                              height: 20,
+                              width: 22,
+                              height: 22,
                               borderRadius: "50%",
                               background: ok ? "#22c55e" : "#e2e8f0",
                               color: ok ? "#ffffff" : "#64748b",
@@ -846,6 +833,7 @@ export default function Home() {
                               justifyContent: "center",
                               fontSize: 11,
                               fontWeight: 700,
+                              flexShrink: 0,
                             }}
                           >
                             {ok ? "✓" : "○"}
@@ -877,13 +865,13 @@ export default function Home() {
                         <div
                           key={String(a.id)}
                           style={{
-                            padding: "8px 12px",
+                            padding: "12px 14px",
                             background: "#f8fafc",
                             border: "1px solid var(--border)",
                             borderRadius: 8,
                           }}
                         >
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                             <strong style={{ fontSize: 12, color: "var(--ink)" }}>
                               {a.action}
                             </strong>
@@ -891,7 +879,7 @@ export default function Home() {
                               {date(a.createdAt)}
                             </span>
                           </div>
-                          <p style={{ margin: 0, fontSize: 11, color: "var(--muted)" }}>
+                          <p style={{ margin: 0, fontSize: 11, color: "var(--muted)", lineHeight: 1.4 }}>
                             {a.detail}
                           </p>
                         </div>
@@ -984,8 +972,7 @@ export default function Home() {
                             {c.status === "draft" ? (
                               <button
                                 disabled={busy || !canManage}
-                                className="btn btn-secondary"
-                                style={{ padding: "6px 12px", fontSize: 12 }}
+                                className="btn btn-secondary btn-sm"
                                 onClick={() => {
                                   if (
                                     window.confirm(
@@ -1001,8 +988,7 @@ export default function Home() {
                             ) : c.status === "approved" ? (
                               <button
                                 disabled={busy || !canManage}
-                                className="btn btn-primary"
-                                style={{ padding: "6px 12px", fontSize: 12 }}
+                                className="btn btn-primary btn-sm"
                                 onClick={() => {
                                   if (
                                     window.confirm(
@@ -1088,24 +1074,26 @@ export default function Home() {
                     <p>Deduplicated customer records ready for verified broadcast.</p>
                   </div>
 
-                  <div style={{ position: "relative", width: 280 }}>
+                  <div style={{ position: "relative", width: 300 }}>
                     <input
                       placeholder="Search by name, mobile, evidence…"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                       style={{
                         width: "100%",
-                        padding: "8px 12px 8px 32px",
+                        padding: "9px 14px 9px 36px",
                         border: "1px solid var(--border)",
-                        borderRadius: 6,
-                        fontSize: 12,
+                        borderRadius: 8,
+                        fontSize: 13,
+                        background: "#ffffff",
+                        transition: "all 0.15s ease",
                       }}
                     />
                     <SearchIcon
                       className="w-4 h-4"
                       style={{
                         position: "absolute",
-                        left: 10,
+                        left: 12,
                         top: "50%",
                         transform: "translateY(-50%)",
                         color: "var(--muted)",
@@ -1245,7 +1233,7 @@ export default function Home() {
                               ) && (
                                 <button
                                   className="btn btn-secondary"
-                                  style={{ padding: "4px 8px", fontSize: 11, marginTop: 6 }}
+                                  style={{ padding: "6px 12px", fontSize: 11, fontWeight: 600, marginTop: 8, borderRadius: 6 }}
                                   onClick={() =>
                                     setMatchLead({
                                       id: String(l.id),
@@ -1304,30 +1292,30 @@ export default function Home() {
                   <span className="badge badge-green">CHECKED BEFORE EVERY SEND</span>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 20 }}>
-                  <div style={{ padding: 14, background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
+                  <div style={{ padding: "16px 18px", background: "#f8fafc", borderRadius: 10, border: "1px solid var(--border)" }}>
                     <strong style={{ fontSize: 13, color: "var(--ink)", display: "block" }}>
                       1. SMS "STOP" Reply
                     </strong>
-                    <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--muted)" }}>
+                    <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--muted)", lineHeight: 1.45 }}>
                       Webhook instantly adds sender number to master suppression list.
                     </p>
                   </div>
 
-                  <div style={{ padding: 14, background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)" }}>
+                  <div style={{ padding: "16px 18px", background: "#f8fafc", borderRadius: 10, border: "1px solid var(--border)" }}>
                     <strong style={{ fontSize: 13, color: "var(--ink)", display: "block" }}>
                       2. Web Unsubscribe
                     </strong>
-                    <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--muted)" }}>
+                    <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--muted)", lineHeight: 1.45 }}>
                       One-click functional opt-out link embedded in every message.
                     </p>
                   </div>
 
-                  <div style={{ padding: 14, background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)" }}>
+                  <div style={{ padding: "16px 18px", background: "#f8fafc", borderRadius: 10, border: "1px solid var(--border)" }}>
                     <strong style={{ fontSize: 13, color: "var(--ink)", display: "block" }}>
                       3. Lead Registration
                     </strong>
-                    <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--muted)" }}>
+                    <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--muted)", lineHeight: 1.45 }}>
                       Successful enquiry submission immediately halts further marketing SMS.
                     </p>
                   </div>
@@ -1342,9 +1330,17 @@ export default function Home() {
                     const result = await action("suppressions", { mobile: rawMobile });
                     if (result) form.reset();
                   }}
-                  style={{ display: "flex", gap: 12, alignItems: "flex-end" }}
+                  style={{
+                    display: "flex",
+                    gap: 16,
+                    alignItems: "flex-end",
+                    padding: "20px 24px",
+                    background: "#f8fafc",
+                    borderRadius: 10,
+                    border: "1px solid var(--border)",
+                  }}
                 >
-                  <label style={{ flex: 1, fontSize: 12, fontWeight: 600 }}>
+                  <label style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "var(--ink-secondary)" }}>
                     Manual Quarantine Add (Australian Mobile)
                     <input
                       name="mobile"
@@ -1354,16 +1350,18 @@ export default function Home() {
                         width: "100%",
                         padding: "10px 14px",
                         border: "1px solid var(--border)",
-                        borderRadius: 6,
-                        marginTop: 4,
+                        borderRadius: 8,
+                        marginTop: 6,
                         fontSize: 13,
+                        height: 42,
+                        background: "#ffffff",
                       }}
                     />
                   </label>
                   <button
                     disabled={busy || !canManage}
                     className="btn btn-secondary"
-                    style={{ height: 42 }}
+                    style={{ height: 42, padding: "0 22px" }}
                   >
                     Add to Do-Not-Contact List
                   </button>
@@ -1421,7 +1419,7 @@ export default function Home() {
           {/* ------------------------------------------------------------- */}
           {tab === "Integrations" && (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20, marginBottom: 28 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 24, marginBottom: 28 }}>
                 {/* 1. GOODSHOWROOM SUBDOMAIN CARD */}
                 <section className="panel" style={{ margin: 0 }}>
                   <div className="panel-header">
@@ -1432,25 +1430,25 @@ export default function Home() {
                     <span className="badge badge-green">SSL Verified</span>
                   </div>
 
-                  <div style={{ marginBottom: 14 }}>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 4 }}>
                       Subdomain Endpoint
                     </label>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", marginTop: 2 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
                       loyalty.smh.goodshowroom.com
                     </div>
                   </div>
 
-                  <div style={{ marginBottom: 14 }}>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 4 }}>
                       Target Experience Embed
                     </label>
-                    <div style={{ fontSize: 12, color: "var(--red)", marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: "var(--red)" }}>
                       https://smh-loyalty-embed.netlify.app
                     </div>
                   </div>
 
-                  <div style={{ padding: "10px 12px", background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)", fontSize: 11, color: "var(--muted)" }}>
+                  <div style={{ padding: "12px 16px", background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)", fontSize: 11, color: "var(--muted)", lineHeight: 1.5 }}>
                     Automated UTM parameters (<code>utm_source=sms</code>, <code>utm_campaign=loyalty</code>) appended to all tracked shortlinks.
                   </div>
                 </section>
@@ -1465,21 +1463,21 @@ export default function Home() {
                     <span className="badge badge-green">BooranSMH Registered</span>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
                     <div>
-                      <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>
+                      <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 4 }}>
                         Registered Sender ID
                       </label>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", marginTop: 2 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>
                         {String(data?.readiness?.senderId || "BooranSMH")}
                       </div>
                     </div>
 
                     <div>
-                      <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>
+                      <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 4 }}>
                         Sending Frequency Cap
                       </label>
-                      <div style={{ fontSize: 12, color: "var(--ink)", marginTop: 2 }}>
+                      <div style={{ fontSize: 12, color: "var(--ink)" }}>
                         1 message / customer / 30 days
                       </div>
                     </div>
@@ -1488,7 +1486,7 @@ export default function Home() {
                   <button
                     className="btn btn-secondary"
                     disabled={busy || !canManage}
-                    style={{ width: "100%" }}
+                    style={{ width: "100%", height: 42 }}
                     onClick={async () => {
                       setBusy(true);
                       try {
@@ -1528,8 +1526,8 @@ export default function Home() {
                       });
                     }}
                   >
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
-                      <label style={{ fontSize: 12, fontWeight: 600 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-secondary)" }}>
                         Primary Assignee · Sales Manager
                         <select
                           required
@@ -1539,10 +1537,12 @@ export default function Home() {
                           }
                           style={{
                             width: "100%",
-                            padding: "10px",
+                            padding: "10px 14px",
                             border: "1px solid var(--border)",
-                            borderRadius: 6,
-                            marginTop: 4,
+                            borderRadius: 8,
+                            marginTop: 6,
+                            height: 42,
+                            background: "#ffffff",
                           }}
                         >
                           <option value="">Select Sales Manager</option>
@@ -1554,7 +1554,7 @@ export default function Home() {
                         </select>
                       </label>
 
-                      <label style={{ fontSize: 12, fontWeight: 600 }}>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-secondary)" }}>
                         Secondary Assignee · General Manager
                         <select
                           required
@@ -1564,10 +1564,12 @@ export default function Home() {
                           }
                           style={{
                             width: "100%",
-                            padding: "10px",
+                            padding: "10px 14px",
                             border: "1px solid var(--border)",
-                            borderRadius: 6,
-                            marginTop: 4,
+                            borderRadius: 8,
+                            marginTop: 6,
+                            height: 42,
+                            background: "#ffffff",
                           }}
                         >
                           <option value="">Select General Manager</option>
@@ -1583,6 +1585,7 @@ export default function Home() {
                     <button
                       className="btn btn-primary"
                       disabled={busy || !canManage}
+                      style={{ height: 42, padding: "0 24px" }}
                     >
                       Save CRM Manager Routing →
                     </button>
@@ -1608,8 +1611,8 @@ export default function Home() {
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
-                <div style={{ padding: 18, background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
+                <div style={{ padding: "20px 22px", background: "#f8fafc", borderRadius: 10, border: "1px solid var(--border)" }}>
                   <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>
                     Delivery Rate
                   </span>
@@ -1619,7 +1622,7 @@ export default function Home() {
                   <small style={{ color: "var(--muted)", fontSize: 10 }}>Confirmed carrier receipts</small>
                 </div>
 
-                <div style={{ padding: 18, background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)" }}>
+                <div style={{ padding: "20px 22px", background: "#f8fafc", borderRadius: 10, border: "1px solid var(--border)" }}>
                   <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>
                     Click-Through Rate (CTR)
                   </span>
@@ -1629,7 +1632,7 @@ export default function Home() {
                   <small style={{ color: "var(--muted)", fontSize: 10 }}>Tracked landing visits</small>
                 </div>
 
-                <div style={{ padding: 18, background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)" }}>
+                <div style={{ padding: "20px 22px", background: "#f8fafc", borderRadius: 10, border: "1px solid var(--border)" }}>
                   <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>
                     Lead Conversion
                   </span>
@@ -1639,7 +1642,7 @@ export default function Home() {
                   <small style={{ color: "var(--muted)", fontSize: 10 }}>Form submissions / visits</small>
                 </div>
 
-                <div style={{ padding: 18, background: "#f8fafc", borderRadius: 8, border: "1px solid var(--border)" }}>
+                <div style={{ padding: "20px 22px", background: "#f8fafc", borderRadius: 10, border: "1px solid var(--border)" }}>
                   <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>
                     Opt-Out Rate
                   </span>
@@ -1672,17 +1675,15 @@ export default function Home() {
       {modal && (
         <div className="modal-overlay" onClick={() => setModal(false)}>
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+            <div className="modal-header">
               <div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px 0", color: "var(--ink)" }}>
-                  Create Verified Loyalty Campaign
-                </h3>
-                <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>
+                <h3>Create Verified Loyalty Campaign</h3>
+                <p>
                   Select from the 7 client-approved templates from Scope Section 5.
                 </p>
               </div>
               <button
-                style={{ background: "none", border: "none", fontSize: 20, color: "var(--muted)" }}
+                style={{ background: "none", border: "none", fontSize: 22, color: "var(--muted)", padding: 4 }}
                 onClick={() => setModal(false)}
               >
                 ×
@@ -1732,7 +1733,7 @@ export default function Home() {
                 }
               }}
             >
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink-secondary)", marginBottom: 8 }}>
                 Campaign Reference Name
                 <input
                   value={campaignName}
@@ -1742,15 +1743,17 @@ export default function Home() {
                   required
                   style={{
                     width: "100%",
-                    padding: "10px 12px",
+                    padding: "10px 14px",
                     border: "1px solid var(--border)",
-                    borderRadius: 6,
-                    marginTop: 4,
+                    borderRadius: 8,
+                    marginTop: 6,
+                    height: 42,
+                    background: "#ffffff",
                   }}
                 />
               </label>
 
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, margin: "14px 0 8px" }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink-secondary)", margin: "16px 0 8px" }}>
                 SMS Message Body (must identify Booran and include {"{link}"} and {"{optout}"})
                 <textarea
                   value={campaignBody}
@@ -1760,12 +1763,15 @@ export default function Home() {
                   required
                   style={{
                     width: "100%",
-                    padding: "10px 12px",
+                    padding: "12px 14px",
                     border: "1px solid var(--border)",
-                    borderRadius: 6,
-                    marginTop: 4,
+                    borderRadius: 8,
+                    marginTop: 6,
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 12,
+                    minHeight: 96,
+                    background: "#ffffff",
+                    lineHeight: 1.5,
                   }}
                 />
               </label>
@@ -1820,8 +1826,8 @@ export default function Home() {
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  marginTop: 20,
-                  paddingTop: 16,
+                  marginTop: 24,
+                  paddingTop: 20,
                   borderTop: "1px solid var(--border)",
                 }}
               >
@@ -1833,6 +1839,7 @@ export default function Home() {
                   type="submit"
                   disabled={busy || !canManage}
                   className="btn btn-primary"
+                  style={{ height: 42, padding: "0 22px" }}
                 >
                   Save Campaign Draft →
                 </button>
@@ -1846,19 +1853,20 @@ export default function Home() {
       {matchLead && (
         <div className="modal-overlay" onClick={() => setMatchLead(null)}>
           <div className="modal-dialog" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
-                Link DealerSocket Customer
-              </h3>
+            <div className="modal-header">
+              <div>
+                <h3>Link DealerSocket Customer</h3>
+                <p>Verify matching phone number before confirming save.</p>
+              </div>
               <button
-                style={{ background: "none", border: "none", fontSize: 18 }}
+                style={{ background: "none", border: "none", fontSize: 22, color: "var(--muted)", padding: 4 }}
                 onClick={() => setMatchLead(null)}
               >
                 ×
               </button>
             </div>
 
-            <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 16px 0" }}>
+            <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 18px 0", lineHeight: 1.5 }}>
               Enter the confirmed DealerSocket Contact ID for <strong>{matchLead.name}</strong>. The worker will verify the phone number matches before saving.
             </p>
 
@@ -1872,7 +1880,7 @@ export default function Home() {
                 setMatchContactId("");
               }}
             >
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink-secondary)", marginBottom: 16 }}>
                 DealerSocket Customer ID (numeric)
                 <input
                   type="text"
@@ -1883,23 +1891,31 @@ export default function Home() {
                   required
                   style={{
                     width: "100%",
-                    padding: "10px",
+                    padding: "10px 14px",
                     border: "1px solid var(--border)",
-                    borderRadius: 6,
-                    marginTop: 4,
+                    borderRadius: 8,
+                    marginTop: 6,
+                    height: 42,
+                    background: "#ffffff",
                   }}
                 />
               </label>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 24, paddingTop: 18, borderTop: "1px solid var(--border)" }}>
                 <button
                   type="button"
                   className="btn btn-secondary"
+                  style={{ height: 40, padding: "0 18px" }}
                   onClick={() => setMatchLead(null)}
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={busy}>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ height: 40, padding: "0 20px" }}
+                  disabled={busy}
+                >
                   Save Match
                 </button>
               </div>
