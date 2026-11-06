@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { Spinner } from "../components/spinner";
 
 async function Experience({
   searchParams,
@@ -55,6 +56,7 @@ export default function LoyaltyExperience({
             alt="Booran Motors"
             style={{ height: 42, width: "auto", objectFit: "contain" }}
           />
+          <Spinner size="md" />
           <span style={{ fontSize: 14, fontWeight: 500, color: "#475467" }}>
             Opening your South Morang Hyundai loyalty experience…
           </span>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import ProductionPanels from "./production-panels";
+import { Spinner, TabLoader, FullscreenSplash } from "./components/spinner";
 import {
   BarChart3Icon,
   CheckCircleIcon,
@@ -72,16 +73,42 @@ function date(v: unknown) {
     : "—";
 }
 
+const TAB_SUBTITLES: Record<string, string> = {
+  Overview: "Synthesizing milestone progress, delivery telemetry, and live pipeline KPIs…",
+  Campaigns: "Loading verified broadcast records, dispatch queues, and Scope SMS templates…",
+  Audience: "Verifying customer consent audit records and mobile numbers…",
+  Leads: "Syncing dual-CRM enquiry pipeline for DealerSocket & Good Showroom…",
+  Suppression: "Compiling real-time opt-out registers, STOP replies, and exclusions…",
+  Integrations: "Querying MobileMessage sender ID and DealerSocket connector heartbeat…",
+  Reports: "Calculating conversion funnel, delivery rates, and UTM attribution…",
+  Operations: "Querying background worker status, dispatch journal, and reconciliation…",
+  Settings: "Retrieving client-approved offer terms, eligibility, and campaign expiry…",
+  Staff: "Verifying authorized operator permissions and security profiles…",
+};
+
 export default function Home() {
   const [user, setUser] = useState<StaffUser | null>(null);
   const canManage = user?.role === "admin" || user?.role === "campaign_manager";
   const [tab, setTab] = useState("Overview");
   const [data, setData] = useState<Data | null>(null);
   const [signed, setSigned] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [tabLoading, setTabLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState(false);
   const [query, setQuery] = useState("");
+
+  const switchTab = (targetTab: string) => {
+    if (targetTab === tab) return;
+    setTabLoading(true);
+    setTab(targetTab);
+    setQuery("");
+    setTimeout(() => {
+      setTabLoading(false);
+    }, 280);
+  };
 
   // Campaign modal states
   const [selectedTemplate, setSelectedTemplate] = useState<ScopeTemplate>(
@@ -136,6 +163,7 @@ export default function Home() {
   }, []);
 
   const refresh = useCallback(async () => {
+    setSyncing(true);
     try {
       const who = await api("me");
       setUser(who);
@@ -156,6 +184,9 @@ export default function Home() {
       setSigned(true);
     } catch (error) {
       setNotice((error as Error).message);
+    } finally {
+      setSyncing(false);
+      setInitialLoading(false);
     }
   }, [api]);
 
@@ -291,7 +322,14 @@ export default function Home() {
   }
 
   // -------------------------------------------------------------
-  // PART 2: DEDICATED FULL-SCREEN LOGIN GATE (WHEN !signed)
+  // PART 2: INITIAL AUTH & WORKSPACE CONNECTIVITY SPLASH
+  // -------------------------------------------------------------
+  if (initialLoading) {
+    return <FullscreenSplash status="Connecting to Booran Campaign Studio…" />;
+  }
+
+  // -------------------------------------------------------------
+  // PART 3: DEDICATED FULL-SCREEN LOGIN GATE (WHEN !signed)
   // -------------------------------------------------------------
   if (!signed) {
     return (
@@ -345,9 +383,24 @@ export default function Home() {
               type="submit"
               disabled={busy}
               className="btn btn-primary"
-              style={{ width: "100%", padding: "12px", marginTop: "4px" }}
+              style={{
+                width: "100%",
+                padding: "12px",
+                marginTop: "4px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
             >
-              {busy ? "Authenticating…" : "Unlock Workspace →"}
+              {busy ? (
+                <>
+                  <Spinner size="xs" color="#ffffff" trackColor="rgba(255, 255, 255, 0.3)" />
+                  <span>Authenticating…</span>
+                </>
+              ) : (
+                "Unlock Workspace →"
+              )}
             </button>
           </form>
 
@@ -432,9 +485,24 @@ export default function Home() {
               type="submit"
               disabled={busy}
               className="btn btn-primary"
-              style={{ width: "100%", padding: "12px", marginTop: "4px" }}
+              style={{
+                width: "100%",
+                padding: "12px",
+                marginTop: "4px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
             >
-              {busy ? "Updating…" : "Update Password & Continue →"}
+              {busy ? (
+                <>
+                  <Spinner size="xs" color="#ffffff" trackColor="rgba(255, 255, 255, 0.3)" />
+                  <span>Updating Password…</span>
+                </>
+              ) : (
+                "Update Password & Continue →"
+              )}
             </button>
           </form>
 
@@ -504,18 +572,17 @@ export default function Home() {
                 <button
                   key={item.id}
                   className={`nav-item ${isActive ? "active" : ""}`}
-                  onClick={() => {
-                    setTab(item.id);
-                    setQuery("");
-                  }}
+                  onClick={() => switchTab(item.id)}
                 >
                   <span className="nav-item-content">
                     <Icon className="w-4 h-4" />
                     <span>{item.label}</span>
                   </span>
-                  {showPendingCount && (
+                  {tabLoading && isActive ? (
+                    <Spinner size="xs" color="var(--red)" />
+                  ) : showPendingCount ? (
                     <span className="nav-badge-count">{m.pending}</span>
-                  )}
+                  ) : null}
                 </button>
               );
             })}
@@ -569,6 +636,7 @@ export default function Home() {
             <span>Workspace</span>
             <span>/</span>
             <strong>{tab}</strong>
+            {tabLoading && <Spinner size="xs" style={{ marginLeft: 6 }} />}
           </div>
 
           <div className="topbar-right">
@@ -585,9 +653,11 @@ export default function Home() {
             <button
               className="sync-button"
               title="Refresh telemetry"
+              disabled={syncing}
               onClick={() => void refresh()}
+              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
             >
-              <RefreshCwIcon className="w-4 h-4" />
+              {syncing ? <Spinner size="xs" /> : <RefreshCwIcon className="w-4 h-4" />}
             </button>
           </div>
         </header>
@@ -638,7 +708,7 @@ export default function Home() {
             <div className="header-action-group">
               <button
                 className="btn btn-secondary"
-                onClick={() => setTab("Audience")}
+                onClick={() => switchTab("Audience")}
               >
                 <UploadCloudIcon className="w-4 h-4" />
                 Import Audience
@@ -666,10 +736,17 @@ export default function Home() {
             </div>
           )}
 
-          {/* ------------------------------------------------------------- */}
-          {/* TAB 2: OVERVIEW & COMMAND CENTER                              */}
-          {/* ------------------------------------------------------------- */}
-          {tab === "Overview" && (
+          {tabLoading ? (
+            <TabLoader
+              title={`Loading ${tab}…`}
+              subtitle={TAB_SUBTITLES[tab] || "Retrieving verified campaign telemetry and records…"}
+            />
+          ) : (
+            <>
+              {/* ------------------------------------------------------------- */}
+              {/* TAB 2: OVERVIEW & COMMAND CENTER                              */}
+              {/* ------------------------------------------------------------- */}
+              {tab === "Overview" && (
             <>
               {/* 4-STAGE DELIVERY MILESTONE TRACKER (SCOPE SECTION 7) */}
               <section className="stepper-card">
@@ -973,6 +1050,7 @@ export default function Home() {
                               <button
                                 disabled={busy || !canManage}
                                 className="btn btn-secondary btn-sm"
+                                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                                 onClick={() => {
                                   if (
                                     window.confirm(
@@ -983,12 +1061,14 @@ export default function Home() {
                                   }
                                 }}
                               >
-                                Review & Approve
+                                {busy && <Spinner size="xs" />}
+                                <span>Review & Approve</span>
                               </button>
                             ) : c.status === "approved" ? (
                               <button
                                 disabled={busy || !canManage}
                                 className="btn btn-primary btn-sm"
+                                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                                 onClick={() => {
                                   if (
                                     window.confirm(
@@ -999,7 +1079,8 @@ export default function Home() {
                                   }
                                 }}
                               >
-                                Send Campaign ↗
+                                {busy && <Spinner size="xs" color="#ffffff" trackColor="rgba(255,255,255,0.3)" />}
+                                <span>Send Campaign ↗</span>
                               </button>
                             ) : (
                               <span style={{ color: "var(--muted)", fontSize: 12 }}>—</span>
@@ -1039,16 +1120,30 @@ export default function Home() {
                 </div>
 
                 <label className="dropzone">
-                  <UploadCloudIcon className="w-10 h-10" style={{ color: "var(--red)", margin: "0 auto 12px" }} />
-                  <strong style={{ fontSize: 15, display: "block", color: "var(--ink)", marginBottom: 4 }}>
-                    Drag & Drop Consented Audience List
-                  </strong>
-                  <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 14px 0" }}>
-                    CSV or XLSX · Up to 10,000 previous customer records · Valid Australian mobile format
-                  </p>
-                  <span className="btn btn-secondary" style={{ pointerEvents: "none" }}>
-                    Select File on Computer
-                  </span>
+                  {busy ? (
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                      <Spinner size="lg" />
+                      <strong style={{ fontSize: 15, display: "block", color: "var(--ink)" }}>
+                        Processing & Verifying Audience Records…
+                      </strong>
+                      <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>
+                        Validating Australian mobile numbers (+614…) and consent audit evidence
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <UploadCloudIcon className="w-10 h-10" style={{ color: "var(--red)", margin: "0 auto 12px" }} />
+                      <strong style={{ fontSize: 15, display: "block", color: "var(--ink)", marginBottom: 4 }}>
+                        Drag & Drop Consented Audience List
+                      </strong>
+                      <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 14px 0" }}>
+                        CSV or XLSX · Up to 10,000 previous customer records · Valid Australian mobile format
+                      </p>
+                      <span className="btn btn-secondary" style={{ pointerEvents: "none" }}>
+                        Select File on Computer
+                      </span>
+                    </>
+                  )}
                   <input
                     type="file"
                     accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -1361,9 +1456,9 @@ export default function Home() {
                   <button
                     disabled={busy || !canManage}
                     className="btn btn-secondary"
-                    style={{ height: 42, padding: "0 22px" }}
+                    style={{ height: 42, padding: "0 22px", display: "inline-flex", alignItems: "center", gap: 8 }}
                   >
-                    Add to Do-Not-Contact List
+                    {busy ? <><Spinner size="xs" /> Adding…</> : "Add to Do-Not-Contact List"}
                   </button>
                 </form>
               </section>
@@ -1486,7 +1581,7 @@ export default function Home() {
                   <button
                     className="btn btn-secondary"
                     disabled={busy || !canManage}
-                    style={{ width: "100%", height: 42 }}
+                    style={{ width: "100%", height: 42, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}
                     onClick={async () => {
                       setBusy(true);
                       try {
@@ -1501,7 +1596,7 @@ export default function Home() {
                       }
                     }}
                   >
-                    Send Telecommunications Test Ping
+                    {busy ? <><Spinner size="xs" /> Testing Connection…</> : "Send Telecommunications Test Ping"}
                   </button>
                 </section>
               </div>
@@ -1585,15 +1680,16 @@ export default function Home() {
                     <button
                       className="btn btn-primary"
                       disabled={busy || !canManage}
-                      style={{ height: 42, padding: "0 24px" }}
+                      style={{ height: 42, padding: "0 24px", display: "inline-flex", alignItems: "center", gap: 8 }}
                     >
-                      Save CRM Manager Routing →
+                      {busy ? <><Spinner size="xs" color="#ffffff" trackColor="rgba(255,255,255,0.3)" /> Saving Routing…</> : "Save CRM Manager Routing →"}
                     </button>
                   </form>
                 ) : (
-                  <p style={{ color: "var(--muted)", fontSize: 12 }}>
-                    Loading verified site assignees from DealerSocket catalog…
-                  </p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 0", color: "var(--muted)", fontSize: 13 }}>
+                    <Spinner size="sm" />
+                    <span>Loading verified site assignees from DealerSocket catalog…</span>
+                  </div>
                 )}
               </section>
             </>
@@ -1666,6 +1762,8 @@ export default function Home() {
               onUpdated={refresh}
             />
           )}
+            </>
+          )}
         </main>
       </div>
 
@@ -1729,7 +1827,7 @@ export default function Home() {
                 });
                 if (result) {
                   setModal(false);
-                  setTab("Campaigns");
+                  switchTab("Campaigns");
                 }
               }}
             >
@@ -1839,9 +1937,9 @@ export default function Home() {
                   type="submit"
                   disabled={busy || !canManage}
                   className="btn btn-primary"
-                  style={{ height: 42, padding: "0 22px" }}
+                  style={{ height: 42, padding: "0 22px", display: "inline-flex", alignItems: "center", gap: 8 }}
                 >
-                  Save Campaign Draft →
+                  {busy ? <><Spinner size="xs" color="#ffffff" trackColor="rgba(255,255,255,0.3)" /> Saving Draft…</> : "Save Campaign Draft →"}
                 </button>
               </div>
             </form>
@@ -1913,10 +2011,10 @@ export default function Home() {
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  style={{ height: 40, padding: "0 20px" }}
+                  style={{ height: 40, padding: "0 20px", display: "inline-flex", alignItems: "center", gap: 8 }}
                   disabled={busy}
                 >
-                  Save Match
+                  {busy ? <><Spinner size="xs" color="#ffffff" trackColor="rgba(255,255,255,0.3)" /> Saving Match…</> : "Save Match"}
                 </button>
               </div>
             </form>
