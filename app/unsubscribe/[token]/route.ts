@@ -14,7 +14,6 @@ async function tokenFor(context: { params: Promise<{ token: string }> }) {
   return /^[a-f0-9-]{36}$/i.test(token) ? token : null;
 }
 export async function GET(_request: Request, context: { params: Promise<{ token: string }> }) {
-  if (process.env.APP_ROLE !== "public") return new Response("Not found", { status: 404 });
   const token = await tokenFor(context);
   if (!token) return page("Link unavailable", "Please check the unsubscribe link in your message.", false, 404);
   try {
@@ -26,7 +25,6 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
   } catch { return page("Please try again", "We could not process your request right now. Please try again shortly.", false, 503); }
 }
 export async function POST(request: Request, context: { params: Promise<{ token: string }> }) {
-  if (process.env.APP_ROLE !== "public") return new Response("Not found", { status: 404 });
   const url = new URL(request.url);
   const origin = `${request.headers.get("x-forwarded-proto") === "https" ? "https:" : url.protocol}//${request.headers.get("host") || url.host}`;
   if (request.headers.get("origin") !== origin) return page("Request unavailable", "Open the unsubscribe link and confirm using the button.", false, 403);

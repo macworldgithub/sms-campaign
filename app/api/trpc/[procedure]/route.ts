@@ -26,8 +26,6 @@ export async function POST(
       headers: { "Cache-Control": "no-store" },
     });
   }
-  if (process.env.APP_ROLE !== "public")
-    return failure("Public landing service only.", 404);
   if (request.headers.get("origin") !== expectedOrigin)
     return failure("Invalid form origin.", 403);
   const { procedure } = await context.params;

@@ -1,17 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  async rewrites() {
-    return {
-      beforeFiles:
-        process.env.APP_ROLE === "public"
-          ? [{ source: "/", destination: "/experience" }]
-          : [],
-      afterFiles: [],
-      fallback: [],
-    };
+  async headers() {
+    return [{ source: "/:path*", headers: [
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      { key: "X-Frame-Options", value: "SAMEORIGIN" },
+      { key: "Content-Security-Policy", value: "object-src 'none'; base-uri 'self'; frame-ancestors 'self'" },
+    ] }];
   },
-  distDir: process.env.APP_ROLE === "public" ? ".next-public" : ".next",
   /* config options here */
   experimental: {
     agentFeedback: true,
@@ -20,7 +17,7 @@ const nextConfig: NextConfig = {
   partialPrefetching: true,
   turbopack: {
     rules: {
-      "*.css": {
+      "globals.css": {
         loaders: ["@tailwindcss/turbopack"],
         as: "*.css",
       },
