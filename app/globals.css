@@ -66,6 +66,23 @@ textarea:focus-visible {
 }
 
 /* Sidebar */
+.portal-mode-shell { --portal-switch-height: 0px; }
+.portal-switch { height:var(--portal-switch-height); position:sticky; top:0; z-index:100; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:0 28px; background:#fff; border-bottom:1px solid #e3e6eb; }
+.portal-switch-brand { display:flex; align-items:baseline; gap:12px; }
+.portal-switch-brand strong { font-size:18px; letter-spacing:1.5px; color:#17212c; }
+.portal-switch-brand span { font-size:12px; color:#697586; }
+.portal-switch-tabs { display:flex; gap:4px; padding:4px; border:1px solid #e2e5ea; border-radius:10px; background:#f5f6f8; }
+.portal-switch-tabs button { padding:9px 17px; background:transparent; border:0; border-radius:7px; font:inherit; font-size:12px; font-weight:600; color:#647082; cursor:pointer; }
+.portal-switch-tabs button[aria-pressed="true"] { background:#e22837; color:#fff; box-shadow:0 2px 6px #e2283720; }
+.portal-switch-tabs button:focus-visible { outline:2px solid #e22837; outline-offset:3px; }
+.portal-view[hidden] { display:none; }
+.portal-mode-shell .sidebar { top:var(--portal-switch-height); height:calc(100dvh - var(--portal-switch-height)); }
+.portal-mode-shell .topbar { top:var(--portal-switch-height); }
+.portal-mode-shell .app-shell, .portal-mode-shell .login-gate-wrapper { min-height:calc(100dvh - var(--portal-switch-height)); }
+.portal-mode-shell .fullscreen-splash-overlay { top:var(--portal-switch-height); height:calc(100dvh - var(--portal-switch-height)); }
+@media(max-width:768px) { .portal-mode-shell .sidebar { height:auto; top:auto; } }
+@media(max-width:600px) { .portal-switch { padding:0 14px; justify-content:center; } .portal-switch-brand { display:none; } .portal-switch-tabs { width:100%; } .portal-switch-tabs button { flex:1; } }
+
 .sidebar {
   width: 280px;
   min-width: 280px;
@@ -77,7 +94,15 @@ textarea:focus-visible {
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
   z-index: 40;
+}
+
+.sidebar > .brand,
+.sidebar > .dealership-pill,
+.sidebar > .nav-label {
+  flex-shrink: 0;
 }
 
 .brand {
@@ -172,9 +197,15 @@ textarea:focus-visible {
   flex-direction: column;
   gap: 6px;
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  margin-bottom: 12px;
 }
 
 .nav-item {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -218,6 +249,7 @@ textarea:focus-visible {
 }
 
 .sidebar-footer {
+  flex-shrink: 0;
   margin-top: auto;
   padding-top: 18px;
   border-top: 1px solid var(--border-subtle);
@@ -1257,6 +1289,169 @@ tbody tr:hover {
   margin-bottom: 20px;
 }
 
+@keyframes themeSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.theme-spinner-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-spinner-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-secondary);
+}
+
+.tab-loader-container {
+  min-height: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  animation: fadeIn 0.25s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tab-loader-card {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px 48px;
+  text-align: center;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.06);
+  max-width: 440px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.tab-loader-spinner-box {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: #fff5f5;
+  border: 1px solid #fee2e2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-loader-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 6px 0;
+}
+
+.tab-loader-subtitle {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.tab-loader-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  background: #f8fafc;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+}
+
+.fullscreen-splash-overlay {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 50% 20%, #ffffff 0%, #f8fafc 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 24px;
+}
+
+.fullscreen-splash-card {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 48px 56px;
+  text-align: center;
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.08);
+  max-width: 480px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.fullscreen-splash-logo {
+  height: 48px;
+  width: auto;
+  object-fit: contain;
+}
+
+.fullscreen-splash-header h1 {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 4px 0;
+}
+
+.fullscreen-splash-header p {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.fullscreen-splash-spinner-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 24px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  width: 100%;
+}
+
+.fullscreen-splash-status {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.fullscreen-splash-footer {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
 /* ------------------------------------------------------------- */
 /* RESPONSIVE DESIGN                                             */
 /* ------------------------------------------------------------- */
@@ -1300,3 +1495,5 @@ tbody tr:hover {
     padding: 20px;
   }
 }
+
+.login-view-switch{display:flex;justify-content:center;margin-bottom:24px}.topbar-right .portal-switch-tabs{flex-shrink:0}@media(max-width:600px){.topbar-right .portal-switch-tabs{width:auto}.topbar-right .portal-switch-tabs button{padding:8px 10px;font-size:11px}}

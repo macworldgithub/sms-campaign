@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 
 async function handler(request: Request, context: { params: Promise<{ path: string[] }> }) {
-  if (process.env.APP_ROLE === "public") return Response.json({ message: "Operator access is unavailable on the public landing service." }, { status: 403 });
   const url = new URL(request.url);
   const origin = `${request.headers.get("x-forwarded-proto") === "https" ? "https:" : url.protocol}//${request.headers.get("host") || url.host}`;
   if (request.method !== "GET" && request.headers.get("origin") !== origin) return Response.json({ message: "Invalid origin." }, { status: 403 });

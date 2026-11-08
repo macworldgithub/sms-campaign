@@ -9,7 +9,8 @@
     "build:public": "node scripts/public.mjs build",
     "start:public": "node scripts/public.mjs start",
     "start": "next start --hostname 127.0.0.1",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:unified": "node scripts/test-unified-portal.mjs"
   },
   "dependencies": {
     "next": "16.4.4",
