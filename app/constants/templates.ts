@@ -10,6 +10,14 @@ export interface ScopeTemplate {
 
 export const SCOPE_TEMPLATES: ScopeTemplate[] = [
   {
+    id: "template-8",
+    name: "Template 8 – New / Demo Hyundai Loyalty Offer",
+    badge: "Year-End Offer",
+    approxChars: "Varies with links",
+    description: "Existing customers: buy a new/demo Hyundai by 31 December for servicing, accessories and gift card benefits.",
+    body: "Booran South Morang Hyundai: Existing customers - buy any new/demo Hyundai by 31 Dec & get 3yrs free servicing + $300 accessories + $300 gift card. Claim: {link} {optout} 03 8432 3000",
+  },
+  {
     id: "template-1",
     name: "Template 1 – Direct Loyalty Offer",
     badge: "Recommended Default",

@@ -944,7 +944,7 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
               <div className="panel-header">
                 <div>
                   <h3>Loyalty Outreach Campaigns</h3>
-                  <p>7 client-approved templates tailored for previous South Morang Hyundai customers.</p>
+                  <p>{SCOPE_TEMPLATES.length} campaign templates tailored for previous South Morang Hyundai customers.</p>
                 </div>
                 <button
                   className="btn btn-primary"
@@ -959,7 +959,7 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
                 <div className="empty-state">
                   <h4>No Campaigns Created Yet</h4>
                   <p>
-                    Select from the 7 client-approved scope templates to launch your verified SMS broadcast.
+                    Select from the {SCOPE_TEMPLATES.length} campaign templates to prepare your SMS broadcast.
                   </p>
                   <button
                     className="btn btn-primary"
@@ -1749,7 +1749,7 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
               <div>
                 <h3>Create Verified Loyalty Campaign</h3>
                 <p>
-                  Select from the 7 client-approved templates from Scope Section 5.
+                  Select from the {SCOPE_TEMPLATES.length} campaign templates, including the supplied year-end offer.
                 </p>
               </div>
               <button
