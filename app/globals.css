@@ -520,101 +520,8 @@ textarea:focus-visible {
 }
 
 /* ------------------------------------------------------------- */
-/* TAB 2: OVERVIEW STEPPER & METRIC CARDS                        */
+/* TAB 2: OVERVIEW METRIC CARDS                                  */
 /* ------------------------------------------------------------- */
-.stepper-card {
-  background: #ffffff;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 24px 28px;
-  margin-bottom: 28px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-}
-
-.stepper-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-  gap: 16px;
-}
-
-.stepper-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-}
-
-.stepper-item {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 18px 20px;
-  background: #f8fafc;
-  position: relative;
-  transition: all 0.15s;
-}
-
-.stepper-item.completed {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
-}
-
-.stepper-item.in_progress {
-  background: #ffffff;
-  border-color: var(--red);
-  box-shadow: 0 0 0 1px var(--red);
-}
-
-.stepper-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.stepper-step-num {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.stepper-badge-status {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  padding: 2px 7px;
-  border-radius: 4px;
-}
-
-.stepper-item.completed .stepper-badge-status {
-  background: #22c55e;
-  color: #ffffff;
-}
-
-.stepper-item.in_progress .stepper-badge-status {
-  background: var(--red);
-  color: #ffffff;
-}
-
-.stepper-item.upcoming .stepper-badge-status {
-  background: #e2e8f0;
-  color: #64748b;
-}
-
-.stepper-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink);
-  margin-bottom: 4px;
-}
-
-.stepper-desc {
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.45;
-  margin: 0;
-}
 
 /* Metric Cards */
 .metric-grid {
@@ -846,10 +753,11 @@ tbody tr:hover {
 /* TEMPLATES & SMARTPHONE PREVIEW                                */
 /* ------------------------------------------------------------- */
 .template-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
-  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 20px;
 }
 
 .template-item {
@@ -979,17 +887,39 @@ tbody tr:hover {
   justify-content: center;
   align-items: center;
   padding: 32px 20px;
-  background: radial-gradient(circle at 50% 30%, #1e293b 0%, #0f172a 100%);
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -15%, rgba(226, 40, 55, 0.3) 0%, transparent 65%),
+    radial-gradient(circle 600px at 90% 85%, rgba(37, 99, 235, 0.22) 0%, transparent 60%),
+    radial-gradient(circle 500px at 10% 80%, rgba(226, 40, 55, 0.18) 0%, transparent 60%),
+    radial-gradient(circle 400px at 50% 50%, rgba(30, 41, 59, 0.6) 0%, transparent 100%),
+    linear-gradient(145deg, #070c18 0%, #0c142b 35%, #151d3b 70%, #080d1e 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-gate-wrapper::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+  opacity: 0.9;
 }
 
 .login-card {
   width: 100%;
-  max-width: 440px;
+  max-width: 450px;
   background: #ffffff;
-  border-radius: 16px;
-  padding: 40px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 42px 40px;
+  box-shadow:
+    0 25px 60px -12px rgba(0, 0, 0, 0.55),
+    0 0 45px -5px rgba(226, 40, 55, 0.16),
+    0 0 0 1px rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  position: relative;
+  z-index: 1;
 }
 
 .login-header {
@@ -1460,10 +1390,6 @@ tbody tr:hover {
     grid-template-columns: repeat(2, 1fr);
     gap: 16px;
   }
-  .stepper-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 14px;
-  }
 }
 
 @media (max-width: 768px) {
@@ -1482,10 +1408,6 @@ tbody tr:hover {
   .metric-grid {
     grid-template-columns: 1fr;
     gap: 14px;
-  }
-  .stepper-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
   }
   .template-grid {
     grid-template-columns: 1fr;

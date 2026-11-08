@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import * as XLSX from "xlsx";
 import ProductionPanels from "../production-panels";
 import DealerSocketLeads from "./dealersocket-leads";
 import { Spinner, TabLoader, FullscreenSplash } from "./spinner";
@@ -75,7 +76,7 @@ function date(v: unknown) {
 }
 
 const TAB_SUBTITLES: Record<string, string> = {
-  Overview: "Synthesizing milestone progress, delivery telemetry, and live pipeline KPIs…",
+  Overview: "Synthesizing campaign performance, delivery telemetry, and live pipeline KPIs…",
   Campaigns: "Loading verified broadcast records, dispatch queues, and Scope SMS templates…",
   Audience: "Verifying customer consent audit records and mobile numbers…",
   Leads: "Syncing dual-CRM enquiry pipeline for DealerSocket & Good Showroom…",
@@ -99,6 +100,7 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
   const [syncing, setSyncing] = useState(false);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loginBusy, setLoginBusy] = useState(false);
   const [modal, setModal] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -159,7 +161,10 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
           }),
     });
     const result = await response.json();
-    if (response.status === 401) setSigned(false);
+    if (path === "me" && response.status === 401) {
+      setSigned(false);
+      setUser(null);
+    }
     if (!response.ok) throw new Error(result.message || "Request failed");
     return result;
   }, []);
@@ -168,24 +173,34 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
     setSyncing(true);
     try {
       const who = await api("me");
-      setUser(who);
-      if (who.mustChangePassword) {
-        setData({
-          metrics: {},
-          campaigns: [],
-          contacts: [],
-          leads: [],
-          suppressions: [],
-          activity: [],
-          readiness: {},
-        });
+      if (who && who.id) {
+        setUser(who);
         setSigned(true);
-        return;
+        if (who.mustChangePassword) {
+          setData({
+            metrics: {},
+            campaigns: [],
+            contacts: [],
+            leads: [],
+            suppressions: [],
+            activity: [],
+            readiness: {},
+          });
+          return;
+        }
+        try {
+          const portalData = await api("portal");
+          setData(portalData);
+        } catch (portalErr) {
+          console.warn("Portal dashboard data fetch failed:", portalErr);
+        }
+      } else {
+        setSigned(false);
+        setUser(null);
       }
-      setData(await api("portal"));
-      setSigned(true);
-    } catch (error) {
-      setNotice((error as Error).message);
+    } catch {
+      setSigned(false);
+      setUser(null);
     } finally {
       setSyncing(false);
       setInitialLoading(false);
@@ -254,18 +269,23 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
 
   async function login(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setBusy(true);
+    setLoginBusy(true);
+    setNotice("");
     try {
       const f = new FormData(e.currentTarget);
       const username = f.get("username") || "admin";
       const password = f.get("password");
-      await api("login", { username, password });
+      const res = await api("login", { username, password });
+      if (res.user) {
+        setUser(res.user);
+        setSigned(true);
+      }
       setNotice("");
       await refresh();
     } catch (error) {
-      setNotice((error as Error).message);
+      setNotice((error as Error).message || "Sign in failed. Check credentials.");
     } finally {
-      setBusy(false);
+      setLoginBusy(false);
     }
   }
 
@@ -295,19 +315,73 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
     try {
       if (file.size > 5 * 1024 * 1024)
         throw new Error("Choose a file smaller than 5 MB.");
-      const workbook = file.name.toLowerCase().endsWith(".xlsx");
-      const encoded = workbook
-        ? await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result).split(",")[1]);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          })
-        : "";
-      const result = await api(
-        workbook ? "contacts/import-workbook" : "contacts/import",
-        workbook ? { base64: encoded } : { rows: parseCSV(await file.text()) }
-      );
+
+      let rows: Record<string, string>[];
+
+      if (file.name.toLowerCase().endsWith(".xlsx")) {
+        // ── Parse XLSX in the browser — no Python / backend dependency ──────────
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: "array" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rawRows: Record<string, string>[] = XLSX.utils.sheet_to_json(sheet, {
+          defval: "",
+          raw: false,
+        });
+        if (rawRows.length === 0) throw new Error("Workbook is empty.");
+
+        // Normalise headers to lowercase for format detection
+        const headers = Object.keys(rawRows[0]).map((h) => h.toLowerCase().trim());
+        const isStandard = ["mobile", "consent", "evidence"].every((h) => headers.includes(h));
+        const dealerMobileAliases = ["mobile number", "mobile", "phone", "cell", "mobile no", "phone number"];
+        const dealerMobileHeader = dealerMobileAliases.find((a) => headers.includes(a));
+
+        if (!isStandard && !dealerMobileHeader) {
+          throw new Error(
+            "Workbook requires either: (a) mobile, consent and evidence columns, " +
+            "or (b) a Mobile Number column from a dealer CRM export."
+          );
+        }
+
+        if (isStandard) {
+          // Standard format — pass rows as-is
+          rows = rawRows.map((r) =>
+            Object.fromEntries(Object.entries(r).map(([k, v]) => [k.trim(), String(v).trim()]))
+          );
+        } else {
+          // Dealer CRM export — map columns, fill consent/evidence automatically
+          const findHeader = (aliases: string[]) =>
+            Object.keys(rawRows[0]).find((k) =>
+              aliases.includes(k.toLowerCase().trim())
+            );
+          const mobileKey     = findHeader(dealerMobileAliases)!;
+          const firstNameKey  = findHeader(["first name", "firstname", "first_name", "given name"]);
+          const lastNameKey   = findHeader(["last name", "lastname", "last_name", "surname", "family name"]);
+          const emailKey      = findHeader(["email address", "email", "e-mail"]);
+          const makeKey       = findHeader(["make"]);
+          const modelKey      = findHeader(["model"]);
+
+          rows = rawRows
+            .filter((r) => String(r[mobileKey] || "").trim())
+            .map((r) => ({
+              mobile:    String(r[mobileKey] || "").trim(),
+              consent:   "express",
+              evidence:  "dealer_crm_export",
+              ...(firstNameKey ? { firstName: String(r[firstNameKey] || "").trim() } : {}),
+              ...(lastNameKey  ? { lastName:  String(r[lastNameKey]  || "").trim() } : {}),
+              ...(emailKey     ? { email:     String(r[emailKey]     || "").trim() } : {}),
+              ...(makeKey      ? { vehicleMake:  String(r[makeKey]  || "").trim() } : {}),
+              ...(modelKey     ? { vehicleModel: String(r[modelKey] || "").trim() } : {}),
+            }));
+        }
+      } else {
+        // CSV — existing path
+        rows = parseCSV(await file.text());
+      }
+
+      if (rows.length > 10000)
+        throw new Error("Maximum 10,000 rows per upload.");
+
+      const result = await api("contacts/import", { rows });
       setNotice(
         `Import summary: ${result.imported} added · ${result.duplicates} duplicates · ${result.rejected.length} rejected${
           result.rejected.length
@@ -336,7 +410,31 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
   if (!signed) {
     return (
       <div className="login-gate-wrapper">
-        <div className="login-card">
+        <div className="login-card" style={{ position: "relative" }}>
+          {/* Loading overlay — covers the whole card while API is in-flight */}
+          {loginBusy && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: "inherit",
+                background: "rgba(255,255,255,0.72)",
+                backdropFilter: "blur(3px)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 14,
+                zIndex: 10,
+              }}
+            >
+              <Spinner size="lg" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", letterSpacing: "0.01em" }}>
+                Authenticating…
+              </span>
+            </div>
+          )}
+
           <div className="login-view-switch">{viewSwitch}</div>
           <div className="login-header">
             <img
@@ -368,6 +466,7 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
                 defaultValue="admin"
                 autoComplete="username"
                 required
+                disabled={loginBusy}
               />
             </label>
 
@@ -379,12 +478,13 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
                 placeholder="Enter password"
                 autoComplete="current-password"
                 required
+                disabled={loginBusy}
               />
             </label>
 
             <button
               type="submit"
-              disabled={busy}
+              disabled={loginBusy}
               className="btn btn-primary"
               style={{
                 width: "100%",
@@ -396,7 +496,7 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
                 gap: 8,
               }}
             >
-              {busy ? (
+              {loginBusy ? (
                 <>
                   <Spinner size="xs" color="#ffffff" trackColor="rgba(255, 255, 255, 0.3)" />
                   <span>Authenticating…</span>
@@ -745,9 +845,6 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
               {/* ------------------------------------------------------------- */}
               {tab === "Overview" && (
             <>
-              {/* 4-STAGE DELIVERY MILESTONE TRACKER (SCOPE SECTION 7) */}
-
-
               {/* 4 TOP RE-ENGINEERED KPI METRIC CARDS */}
               <div className="metric-grid">
                 <div className="metric-card">
@@ -1760,36 +1857,7 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
               </button>
             </div>
 
-            {/* TEMPLATE PICKER GRID */}
-            <div className="template-grid">
-              {SCOPE_TEMPLATES.map((tmpl) => (
-                <div
-                  key={tmpl.id}
-                  className={`template-item ${
-                    selectedTemplate.id === tmpl.id ? "selected" : ""
-                  }`}
-                  onClick={() => {
-                    setSelectedTemplate(tmpl);
-                    setCampaignBody(tmpl.body);
-                  }}
-                >
-                  <div className="template-item-top">
-                    <span className="template-item-title">{tmpl.name}</span>
-                    <span
-                      className={`badge ${
-                        tmpl.recommended ? "badge-green" : "badge-blue"
-                      }`}
-                    >
-                      {tmpl.badge}
-                    </span>
-                  </div>
-                  <p className="template-item-desc">{tmpl.description}</p>
-                  <div className="template-item-preview">{tmpl.body}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* CAMPAIGN FORM */}
+            {/* CAMPAIGN FORM - STRICT TOP-TO-BOTTOM SEQUENTIAL FLOW */}
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
@@ -1802,9 +1870,11 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
                   switchTab("Campaigns");
                 }
               }}
+              style={{ display: "flex", flexDirection: "column", gap: 16 }}
             >
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink-secondary)", marginBottom: 8 }}>
-                Campaign Reference Name
+              {/* STEP 1: CAMPAIGN NAME */}
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink)", margin: 0 }}>
+                1. Campaign Reference Name
                 <input
                   value={campaignName}
                   onChange={(e) => setCampaignName(e.target.value)}
@@ -1819,12 +1889,91 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
                     marginTop: 6,
                     height: 42,
                     background: "#ffffff",
+                    fontSize: 13,
                   }}
                 />
               </label>
 
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink-secondary)", margin: "16px 0 8px" }}>
-                SMS Message Body (must identify Booran and include {"{link}"} and {"{optout}"})
+              {/* STEP 2: TEMPLATE SELECTOR (TOP-TO-BOTTOM) */}
+              <div>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink)", marginBottom: 6 }}>
+                  2. Select Approved Campaign Template
+                </label>
+                <select
+                  value={selectedTemplate.id}
+                  onChange={(e) => {
+                    const tmpl = SCOPE_TEMPLATES.find((t) => t.id === e.target.value) || SCOPE_TEMPLATES[0];
+                    setSelectedTemplate(tmpl);
+                    setCampaignBody(tmpl.body);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    height: 44,
+                    background: "#ffffff",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "var(--ink)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {SCOPE_TEMPLATES.map((tmpl) => (
+                    <option key={tmpl.id} value={tmpl.id}>
+                      {tmpl.name} {tmpl.badge ? `· [${tmpl.badge}]` : ""}
+                    </option>
+                  ))}
+                </select>
+
+                {/* SELECTED TEMPLATE DETAILS CARD */}
+                <div
+                  style={{
+                    marginTop: 10,
+                    padding: "14px 16px",
+                    background: "#f8fafc",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>
+                      {selectedTemplate.name}
+                    </span>
+                    <span className={`badge ${selectedTemplate.recommended ? "badge-green" : "badge-blue"}`}>
+                      {selectedTemplate.badge}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: 11, color: "var(--muted)", margin: 0, lineHeight: 1.5 }}>
+                    {selectedTemplate.description}
+                  </p>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontFamily: "ui-monospace, monospace",
+                      background: "#ffffff",
+                      padding: "8px 10px",
+                      borderRadius: 6,
+                      border: "1px solid var(--border-subtle)",
+                      color: "#334155",
+                      marginTop: 4,
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {selectedTemplate.body}
+                  </div>
+                </div>
+              </div>
+
+              {/* STEP 3: SMS MESSAGE BODY */}
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink)", margin: 0 }}>
+                3. SMS Message Body
+                <span style={{ display: "block", fontSize: 11, fontWeight: 400, color: "var(--muted)", marginTop: 2 }}>
+                  Must identify Booran and include mandatory tags: {"{link}"} and {"{optout}"}.
+                </span>
                 <textarea
                   value={campaignBody}
                   onChange={(e) => setCampaignBody(e.target.value)}
@@ -1839,15 +1988,43 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
                     marginTop: 6,
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 12,
-                    minHeight: 96,
+                    minHeight: 100,
                     background: "#ffffff",
                     lineHeight: 1.5,
                   }}
                 />
               </label>
 
-              {/* REAL-TIME TELEMETRY BAR */}
-              <div className="telemetry-row">
+              {/* TOKEN CHIP SHORTCUTS */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>Insert tag:</span>
+                {["{firstName}", "{link}", "{optout}", "03 8432 3000"].map((token) => (
+                  <button
+                    key={token}
+                    type="button"
+                    onClick={() => {
+                      if (!campaignBody.includes(token)) {
+                        setCampaignBody((prev) => `${prev} ${token}`.trim());
+                      }
+                    }}
+                    style={{
+                      background: "#f1f5f9",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: 4,
+                      padding: "2px 8px",
+                      fontSize: 11,
+                      fontFamily: "ui-monospace, monospace",
+                      color: "#334155",
+                      cursor: "pointer",
+                    }}
+                  >
+                    + {token}
+                  </button>
+                ))}
+              </div>
+
+              {/* STEP 4: REAL-TIME TELEMETRY BAR */}
+              <div className="telemetry-row" style={{ margin: 0 }}>
                 <div>
                   <strong style={{ color: "var(--ink)" }}>
                     {telemetry.renderedLength} characters
@@ -1878,10 +2055,10 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
                 </div>
               </div>
 
-              {/* LIVE SMARTPHONE MESSAGE PREVIEW BUBBLE */}
-              <div className="phone-preview-shell">
+              {/* STEP 5: LIVE SMARTPHONE MESSAGE PREVIEW BUBBLE */}
+              <div className="phone-preview-shell" style={{ marginTop: 0 }}>
                 <div className="phone-preview-header">
-                  <span>Simulated Handset Preview</span>
+                  <span>5. Simulated Handset Preview</span>
                   <span>Sender ID: BooranSMH</span>
                 </div>
 
@@ -1891,19 +2068,24 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
                 </div>
               </div>
 
+              {/* STEP 6: ACTIONS */}
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  marginTop: 24,
-                  paddingTop: 20,
+                  marginTop: 12,
+                  paddingTop: 16,
                   borderTop: "1px solid var(--border)",
                 }}
               >
-                <span style={{ fontSize: 11, color: "var(--muted)" }}>
-                  Client copy approval required before live broadcast.
-                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setModal(false)}
+                >
+                  Cancel
+                </button>
 
                 <button
                   type="submit"

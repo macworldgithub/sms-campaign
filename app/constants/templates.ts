@@ -76,50 +76,6 @@ export const SCOPE_TEMPLATES: ScopeTemplate[] = [
   },
 ];
 
-export interface DeliveryMilestone {
-  step: number;
-  dates: string;
-  title: string;
-  owner: string;
-  status: "completed" | "in_progress" | "upcoming";
-  details: string;
-}
-
-export const DELIVERY_MILESTONES: DeliveryMilestone[] = [
-  {
-    step: 1,
-    dates: "31 Oct – 3 Nov",
-    title: "Scope & Copy Approval",
-    owner: "Client + OmniSuiteAI",
-    status: "completed",
-    details: "Scope confirmation, consented target list receipt, SMS copy sign-off, and Sender ID verification.",
-  },
-  {
-    step: 2,
-    dates: "4 – 6 Nov",
-    title: "Subdomain & CRM Mapping",
-    owner: "OmniSuiteAI",
-    status: "in_progress",
-    details: "loyalty.smh.goodshowroom.com provision, sending platform frequency configuration, and DealerSocket + GoodShowroom routing.",
-  },
-  {
-    step: 3,
-    dates: "7 – 8 Nov",
-    title: "End-to-End Simulation",
-    owner: "OmniSuiteAI + Client",
-    status: "upcoming",
-    details: "Verified SMS dispatch test, shortlink attribution, landing form enquiry capture, and immediate opt-out suppression.",
-  },
-  {
-    step: 4,
-    dates: "9 Nov 2026",
-    title: "Go-Live First Send",
-    owner: "OmniSuiteAI",
-    status: "upcoming",
-    details: "First compliant outbound broadcast to eligible audience with real-time manager routing in both CRMs.",
-  },
-];
-
 export function calculateSmsTelemetry(
   template: string,
   sampleName = "Alex",
