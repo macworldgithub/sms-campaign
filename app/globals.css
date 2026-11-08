@@ -815,12 +815,14 @@ tbody tr:hover {
 /* ------------------------------------------------------------- */
 .template-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   margin-bottom: 24px;
 }
 
 .template-item {
+  min-width: 0;
+  overflow-wrap: anywhere;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px 18px;
@@ -845,6 +847,7 @@ tbody tr:hover {
 
 .template-item-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
@@ -872,9 +875,8 @@ tbody tr:hover {
   padding: 8px 10px;
   border-radius: 6px;
   color: #334155;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Smartphone Message Preview Bubble */
@@ -1048,6 +1050,7 @@ tbody tr:hover {
 }
 
 .modal-dialog {
+  min-width: 0;
   background: #ffffff;
   border-radius: 16px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
