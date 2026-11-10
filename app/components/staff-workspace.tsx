@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import * as XLSX from "xlsx";
+import KiaCampaign from "./kia-campaign";
 import ProductionPanels from "../production-panels";
 import DealerSocketLeads from "./dealersocket-leads";
 import { Spinner, TabLoader, FullscreenSplash } from "./spinner";
@@ -53,6 +54,7 @@ const navTabs = [
   { id: "Overview", label: "Overview", icon: LayoutDashboardIcon },
   { id: "Campaigns", label: "Campaigns", icon: SendIcon },
   { id: "Audience", label: "Audience", icon: UsersIcon },
+  { id: "KIASMORANG", label: "KIASMORANG", icon: SendIcon },
   { id: "Leads", label: "Leads", icon: UserCheckIcon },
   { id: "Suppression", label: "Suppression", icon: ShieldAlertIcon },
   { id: "Reports", label: "Reports", icon: BarChart3Icon },
@@ -652,14 +654,14 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
             className="brand-logo"
           />
           <div className="brand-text">
-            <h1>South Morang Hyundai</h1>
+            <h1>{tab === "KIASMORANG" ? "South Morang Kia" : "South Morang Hyundai"}</h1>
             <p>Loyalty Campaign Studio</p>
           </div>
         </a>
 
         <div className="dealership-pill">
-          <span className="rooftop-name">South Morang Hyundai</span>
-          <span className="site-id">SITE 10876</span>
+          <span className="rooftop-name">{tab === "KIASMORANG" ? "South Morang Kia" : "South Morang Hyundai"}</span>
+          <span className="site-id">{tab === "KIASMORANG" ? "KIA SMS" : "SITE 10876"}</span>
         </div>
 
         <p className="nav-label">WORKSPACE</p>
@@ -772,7 +774,7 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
                   margin: "0 0 4px 0",
                 }}
               >
-                SOUTH MORANG HYUNDAI · PREVIOUS CLIENT RE-ENGAGEMENT
+                {tab === "KIASMORANG" ? "SOUTH MORANG KIA · SELTOS LAUNCH PARTY" : "SOUTH MORANG HYUNDAI · PREVIOUS CLIENT RE-ENGAGEMENT"}
               </p>
               <h2>{tab === "Overview" ? "Loyalty Campaign Operations" : tab}</h2>
               <p>
@@ -1087,7 +1089,7 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
                               {c.name}
                             </strong>
                             <span style={{ fontSize: 11, color: "var(--muted)" }}>
-                              Sender: BooranSMH · Subdomain: /loyalty
+                              {c.dealership === "KIASMORANG" ? "KIASMORANG · Seltos event · isolated Kia audience" : "Sender: BooranSMH · Subdomain: /loyalty"}
                             </span>
                           </td>
                           <td>
@@ -1105,7 +1107,7 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
                               {String(c.status).replaceAll("_", " ")}
                             </span>
                           </td>
-                          <td>{c.recipients || 0}</td>
+                          <td>{c.audienceSize || c.recipients || 0}</td>
                           <td>{date(c.createdAt)}</td>
                           <td>
                             {c.status === "draft" ? (
@@ -1160,6 +1162,7 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
           {/* ------------------------------------------------------------- */}
           {/* TAB 4: AUDIENCE & ACMA CONSENT HYGIENE                        */}
           {/* ------------------------------------------------------------- */}
+          {tab === "KIASMORANG" && <KiaCampaign api={api} />}
           {tab === "Audience" && (
             <>
               {/* UPLOAD DROPZONE */}

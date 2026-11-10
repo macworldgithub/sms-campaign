@@ -19,7 +19,7 @@ async function handler(request: Request, context: { params: Promise<{ path: stri
   };
 
   if (
-    !/^(login|me|logout|password|users|settings|operations(?:\/[^/]+(?:\/[^/]+)?)?|portal|routing|sms\/(?:test|outbound|inbox(?:\/sync)?|activity\/[\w-]+\/customer)|leads\/[\w-]+\/customer|contacts\/import(?:-workbook)?|suppressions|campaigns(?:\/[\w-]+\/(?:approve|send|pause|resume))?|dealersocket(?:\/(?:check|login|sync))?|provider)$/.test(
+    !/^(login|me|logout|password|users|settings|kiasmorang(?:\/import)?|operations(?:\/[^/]+(?:\/[^/]+)?)?|portal|routing|sms\/(?:test|outbound|inbox(?:\/sync)?|activity\/[\w-]+\/customer)|leads\/[\w-]+\/customer|contacts\/import(?:-workbook)?|suppressions|campaigns(?:\/[\w-]+\/(?:approve|send|pause|resume))?|dealersocket(?:\/(?:check|login|sync))?|provider)$/.test(
       endpoint
     )
   ) {
@@ -40,7 +40,7 @@ async function handler(request: Request, context: { params: Promise<{ path: stri
 
   for (const backend of targets) {
     try {
-      const response = await fetch(`${backend}/api/${aliases[endpoint] || endpoint}`, {
+      const response = await fetch(`${backend}/api/${aliases[endpoint] || endpoint}${url.search}`, {
         method: request.method,
         headers: {
           "Content-Type": "application/json",
