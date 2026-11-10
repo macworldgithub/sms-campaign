@@ -20,6 +20,10 @@ const stub = createServer(async (req, res) => {
   if (req.url === '/api/auth/login') return reply(201, { token, user: { username: 'fixture', role: 'viewer' } });
   if (req.headers.authorization !== `Bearer ${token}`) return reply(401, { message: 'Sign in' });
   if (req.url === '/api/auth/me') return reply(200, { username: 'fixture', role: 'viewer' });
+  if (req.url === '/api/hyundsmora?page=2&search=Owner') return reply(200, { campaign: { name: 'Hyundai fixture' }, audience: { unique: 51 }, rows: [{ firstName: 'Owner', mobile: '+61412345678' }], total: 51, page: 2 });
+  if (['/api/hyundsmora/send', '/api/hyundsmora/process', '/api/hyundsmora/sms'].includes(req.url)) return reply(403, { message: 'Viewer cannot send or edit campaigns' });
+  if (req.url === '/api/kiasmorang?page=2&search=Owner') return reply(200, { campaign: { name: 'Kia fixture' }, audience: { unique: 51 }, rows: [], page: 2 });
+  if (['/api/kiasmorang/send', '/api/kiasmorang/process', '/api/kiasmorang/sms'].includes(req.url)) return reply(403, { message: 'Viewer cannot send or edit campaigns' });
   if (req.url === '/api/auth/logout') return reply(201, { ok: true });
   return reply(404, { message: 'Not found' });
 });
@@ -66,6 +70,16 @@ try {
   assert.ok(staffCookie); assert.equal((await login.json()).token, undefined);
   assert.ok(login.headers.get('set-cookie').includes('HttpOnly')); assert.ok(login.headers.get('set-cookie').includes('SameSite=strict'));
   assert.equal((await call('/api/portal/me', { headers: { Cookie: staffCookie } })).status, 200);
+  assert.equal((await call('/api/portal/hyundsmora')).status, 401);
+  const hyundai = await call('/api/portal/hyundsmora?page=2&search=Owner', { headers: { Cookie: staffCookie } });
+  assert.equal(hyundai.status, 200);
+  assert.equal((await hyundai.json()).page, 2);
+  assert.equal((await post('/api/portal/hyundsmora/send', { scope: '150' }, staffCookie)).status, 403);
+  assert.equal((await post('/api/portal/hyundsmora/process', {}, staffCookie)).status, 403);
+  assert.equal((await post('/api/portal/hyundsmora/sms', { body: 'Changed', expectedRevision: 0 }, staffCookie)).status, 403);
+  assert.equal((await call('/api/portal/kiasmorang')).status, 401);
+  assert.equal((await call('/api/portal/kiasmorang?page=2&search=Owner', { headers: { Cookie: staffCookie } })).status, 200);
+  for (const action of ['send', 'process', 'sms']) assert.equal((await post('/api/portal/kiasmorang/' + action, {}, staffCookie)).status, 403);
   assert.equal((await post('/api/portal/logout', {}, staffCookie, 'https://wrong.example.test')).status, 403);
   assert.equal((await post('/api/portal/logout', {}, staffCookie)).status, 201);
   const legacy = await call('/experience?ref=' + ref); assert.equal(legacy.status, 307); assert.equal(new URL(legacy.headers.get('location')).pathname, '/'); assert.equal(new URL(legacy.headers.get('location')).searchParams.get('view'), 'customer');

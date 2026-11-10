@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import * as XLSX from "xlsx";
 import KiaCampaign from "./kia-campaign";
+import HyundaiCampaign from "./hyundai-campaign";
 import ProductionPanels from "../production-panels";
 import DealerSocketLeads from "./dealersocket-leads";
 import { Spinner, TabLoader, FullscreenSplash } from "./spinner";
@@ -55,6 +56,7 @@ const navTabs = [
   { id: "Campaigns", label: "Campaigns", icon: SendIcon },
   { id: "Audience", label: "Audience", icon: UsersIcon },
   { id: "KIASMORANG", label: "KIASMORANG", icon: SendIcon },
+  { id: "HYUNDSMORA", label: "HYUNDSMORA", icon: SendIcon },
   { id: "Leads", label: "Leads", icon: UserCheckIcon },
   { id: "Suppression", label: "Suppression", icon: ShieldAlertIcon },
   { id: "Reports", label: "Reports", icon: BarChart3Icon },
@@ -1162,7 +1164,8 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
           {/* ------------------------------------------------------------- */}
           {/* TAB 4: AUDIENCE & ACMA CONSENT HYGIENE                        */}
           {/* ------------------------------------------------------------- */}
-          {tab === "KIASMORANG" && <KiaCampaign api={api} />}
+          {tab === "KIASMORANG" && <KiaCampaign api={api} canManage={canManage} />}
+          {tab === "HYUNDSMORA" && <HyundaiCampaign api={api} canManage={canManage} />}
           {tab === "Audience" && (
             <>
               {/* UPLOAD DROPZONE */}
