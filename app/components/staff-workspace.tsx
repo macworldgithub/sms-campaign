@@ -152,6 +152,7 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
     { sender: string; label?: string; type: string }[]
   >([]);
   const [sms, setSms] = useState<{ tests: Row[]; messages?: Row[] } | null>(null);
+  const [kiaTestRequestId, setKiaTestRequestId] = useState<string | null>(null);
   const [testRequestId, setTestRequestId] = useState<string | null>(null);
 
   const api = useCallback(async (path: string, body?: unknown) => {
@@ -1669,6 +1670,31 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
                     }}
                   >
                     {busy ? <><Spinner size="xs" /> Testing Connection…</> : "Send Telecommunications Test Ping"}
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    disabled={busy || !canManage}
+                    style={{ width: "100%", height: 42, marginTop: 8 }}
+                    onClick={async () => {
+                      setBusy(true);
+                      try {
+                        const { campaign } = await api("kiasmorang");
+                        if (typeof campaign?.id !== "string" || !campaign.id) {
+                          throw new Error("The saved Kia campaign is unavailable.");
+                        }
+                        const requestId = kiaTestRequestId ?? crypto.randomUUID();
+                        setKiaTestRequestId(requestId);
+                        const result = await api("sms/test", { requestId, campaignId: campaign.id });
+                        setNotice("KIASMORANG test SMS status: " + result.status + ".");
+                        setKiaTestRequestId(null);
+                      } catch (error) {
+                        setNotice((error as Error).message);
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    Send KIASMORANG Test SMS
                   </button>
                 </section>
               </div>
