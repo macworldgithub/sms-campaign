@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import * as XLSX from "xlsx";
 import KiaCampaign from "./kia-campaign";
+import SouthMorangProspects from "./south-morang-prospects";
 import HyundaiCampaign from "./hyundai-campaign";
 import ProductionPanels from "../production-panels";
 import DealerSocketLeads from "./dealersocket-leads";
@@ -1331,6 +1332,7 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
           {/* ------------------------------------------------------------- */}
           {/* TAB 5: LEADS & DUAL-CRM PIPELINE                              */}
           {/* ------------------------------------------------------------- */}
+          {tab === "Leads" && <SouthMorangProspects />}
           {tab === "Leads" && (
             <>
             <DealerSocketLeads api={api} canManage={canManage} />

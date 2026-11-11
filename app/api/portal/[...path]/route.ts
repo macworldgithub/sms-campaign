@@ -19,7 +19,7 @@ async function handler(request: Request, context: { params: Promise<{ path: stri
   };
 
   if (
-    !/^(login|me|logout|password|users|settings|kiasmorang(?:\/(?:import|send|process|sms))?|hyundsmora(?:\/(?:import|send|process|sms))?|operations(?:\/[^/]+(?:\/[^/]+)?)?|portal|routing|sms\/(?:test|outbound|inbox(?:\/sync)?|activity\/[\w-]+\/customer)|leads\/[\w-]+\/customer|contacts\/import(?:-workbook)?|suppressions|campaigns(?:\/[\w-]+\/(?:approve|send|pause|resume))?|dealersocket(?:\/(?:check|login|sync))?|provider)$/.test(
+    !/^(login|me|logout|password|users|settings|south-morang-prospects|kiasmorang(?:\/(?:import|send|process|sms))?|hyundsmora(?:\/(?:import|send|process|sms))?|operations(?:\/[^/]+(?:\/[^/]+)?)?|portal|routing|sms\/(?:test|outbound|inbox(?:\/sync)?|activity\/[\w-]+\/customer)|leads\/[\w-]+\/customer|contacts\/import(?:-workbook)?|suppressions|campaigns(?:\/[\w-]+\/(?:approve|send|pause|resume))?|dealersocket(?:\/(?:check|login|sync))?|provider)$/.test(
       endpoint
     )
   ) {
