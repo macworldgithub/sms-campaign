@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-type Prospect = { site: string; id: string; name: string; franchise: string; status: string; assignee: string; vehicle: string };
+type Prospect = { site: string; id: string; name: string; franchise: string; status: string; assignee: string; vehicle: string; mobile?: string; email?: string; customerDetails?: string };
 type Snapshot = { capturedAt: string | null; total: number; all: number; page: number; pages: number; rows: Prospect[] };
 
 export default function SouthMorangProspects() {
@@ -46,8 +46,8 @@ export default function SouthMorangProspects() {
       <div className="table-container"><table>
         <thead><tr><th>Prospect</th><th>Franchise</th><th>Opportunity</th><th>Status</th><th>Assigned to</th><th>Vehicle</th></tr></thead>
         <tbody>{data.rows.map(row => <tr key={row.site + "|" + row.id}>
-          <td>{row.name || "—"}</td><td>{row.franchise || (row.site === "10755" ? "South Morang Kia" : "South Morang Hyundai")}</td>
-          <td>{row.id}</td><td>{row.status || "—"}</td><td>{row.assignee || "—"}</td><td>{row.vehicle || "—"}</td>
+          <td>{row.name || "—"}{row.mobile && <div>{row.mobile}</div>}{row.email && <div>{row.email}</div>}{row.customerDetails === "restricted" && <div>Contact details restricted</div>}</td><td>{row.franchise || (row.site === "10755" ? "South Morang Kia" : "South Morang Hyundai")}</td>
+          <td>{row.id}</td><td>{row.status || "—"}</td><td>{row.assignee || (row.customerDetails === "verified" ? "No assignment returned" : "Assignment not verified")}</td><td>{row.vehicle || "—"}</td>
         </tr>)}</tbody>
       </table></div>
       <p>{data.total.toLocaleString()} matches · Page {data.page} of {data.pages}</p>
