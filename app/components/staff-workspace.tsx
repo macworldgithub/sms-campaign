@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
-import * as XLSX from "xlsx";
-import KiaCampaign from "./kia-campaign";
-import SouthMorangProspects from "./south-morang-prospects";
-import HyundaiCampaign from "./hyundai-campaign";
-import ProductionPanels from "../production-panels";
-import DealerSocketLeads from "./dealersocket-leads";
+import { useCallback, useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
+import dynamic from "next/dynamic";
+const KiaCampaign = dynamic(() => import("./kia-campaign"));
+const SouthMorangProspects = dynamic(() => import("./south-morang-prospects"));
+const HyundaiCampaign = dynamic(() => import("./hyundai-campaign"));
+const ProductionPanels = dynamic(() => import("../production-panels"));
+const DealerSocketLeads = dynamic(() => import("./dealersocket-leads"));
 import { Spinner, TabLoader, FullscreenSplash } from "./spinner";
 import {
   BarChart3Icon,
@@ -101,22 +101,21 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
   const [data, setData] = useState<Data | null>(null);
   const [signed, setSigned] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [tabLoading, setTabLoading] = useState(false);
+  const [tabLoading, startTabTransition] = useTransition();
   const [syncing, setSyncing] = useState(false);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [loginBusy, setLoginBusy] = useState(false);
   const [modal, setModal] = useState(false);
   const [query, setQuery] = useState("");
+  const refreshing = useRef(false);
 
   const switchTab = (targetTab: string) => {
     if (targetTab === tab) return;
-    setTabLoading(true);
-    setTab(targetTab);
-    setQuery("");
-    setTimeout(() => {
-      setTabLoading(false);
-    }, 280);
+    startTabTransition(() => {
+      setTab(targetTab);
+      setQuery("");
+    });
   };
 
   // Campaign modal states
@@ -176,6 +175,8 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
   }, []);
 
   const refresh = useCallback(async () => {
+    if (refreshing.current) return;
+    refreshing.current = true;
     setSyncing(true);
     try {
       const who = await api("me");
@@ -208,6 +209,7 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
       setSigned(false);
       setUser(null);
     } finally {
+      refreshing.current = false;
       setSyncing(false);
       setInitialLoading(false);
     }
@@ -227,26 +229,39 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
 
   useEffect(() => {
     if (!signed || tab !== "Integrations") return;
-    const load = () =>
-      void api("dealersocket")
-        .then(setDealer)
-        .catch(() => {});
-    load();
+    let loading = false;
+    const load = async () => {
+      if (loading || document.visibilityState === "hidden") return;
+      loading = true;
+      try { setDealer(await api("dealersocket")); }
+      catch { /* Retain the latest successful snapshot. */ }
+      finally { loading = false; }
+    };
+    void load();
     const timer = setInterval(load, 15000);
     return () => clearInterval(timer);
   }, [signed, tab, api]);
 
   useEffect(() => {
     if (!signed || tab !== "Integrations") return;
-    const load = () => void api("sms/outbound").then(setSms).catch(() => {});
-    load();
+    let loading = false;
+    const load = async () => {
+      if (loading || document.visibilityState === "hidden") return;
+      loading = true;
+      try { setSms(await api("sms/outbound")); }
+      catch { /* Retain the latest successful snapshot. */ }
+      finally { loading = false; }
+    };
+    void load();
     const timer = setInterval(load, 15000);
     return () => clearInterval(timer);
   }, [signed, tab, api]);
 
   useEffect(() => {
     if (!signed) return;
-    const timer = setInterval(() => void refresh(), 30000);
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, 30000);
     return () => clearInterval(timer);
   }, [signed, refresh]);
 
@@ -325,6 +340,7 @@ export default function StaffWorkspace({ viewSwitch }: { viewSwitch: ReactNode }
       let rows: Record<string, string>[];
 
       if (file.name.toLowerCase().endsWith(".xlsx")) {
+        const XLSX = await import("xlsx");
         // ── Parse XLSX in the browser — no Python / backend dependency ──────────
         const buffer = await file.arrayBuffer();
         const wb = XLSX.read(buffer, { type: "array" });

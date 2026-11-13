@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import LoyaltyForm from "../loyalty/loyalty-form";
-import StaffWorkspace from "./staff-workspace";
+import dynamic from "next/dynamic";
 import PortalViewSwitch from "./portal-view-switch";
+
+const LoyaltyForm = dynamic(() => import("../loyalty/loyalty-form"));
+const StaffWorkspace = dynamic(() => import("./staff-workspace"));
 
 type View = "customer" | "staff";
 const subscribe = (notify: () => void) => { window.addEventListener("popstate", notify); return () => window.removeEventListener("popstate", notify); };

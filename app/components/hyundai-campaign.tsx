@@ -32,7 +32,7 @@ export default function HyundaiCampaign({ api, canManage = false }: { api: (path
     let active = true;
     let loading = false;
     const load = async () => {
-      if (loading) return;
+      if (loading || document.visibilityState === "hidden") return;
       loading = true;
       try {
         const value = await api(`hyundsmora?page=${page}&search=${encodeURIComponent(search)}`);

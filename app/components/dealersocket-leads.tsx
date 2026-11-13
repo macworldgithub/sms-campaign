@@ -25,9 +25,13 @@ export default function DealerSocketLeads({ api, canManage }: Props) {
   const [page, setPage] = useState(0);
   useEffect(() => {
     let active = true;
+    let loading = false;
     const load = async () => {
+      if (loading || document.visibilityState === "hidden") return;
+      loading = true;
       try { const result = await api("dealersocket"); if (active) { setData(result); setError(""); } }
       catch (failure) { if (active) setError((failure as Error).message); }
+      finally { loading = false; }
     };
     void load();
     const timer = setInterval(() => void load(), 15000);

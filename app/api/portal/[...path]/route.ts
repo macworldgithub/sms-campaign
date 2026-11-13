@@ -34,7 +34,6 @@ async function handler(request: Request, context: { params: Promise<{ path: stri
 
   const primaryUrl = process.env.BACKEND_URL || "http://127.0.0.1:4000";
   const targets = [primaryUrl];
-  if (primaryUrl !== "http://127.0.0.1:4000") targets.push("http://127.0.0.1:4000");
 
   const requestBody = request.method !== "GET" ? await request.text() : undefined;
 
@@ -49,14 +48,23 @@ async function handler(request: Request, context: { params: Promise<{ path: stri
         },
         ...(requestBody !== undefined ? { body: requestBody } : {}),
         cache: "no-store",
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.any([request.signal, AbortSignal.timeout(30000)]),
       });
 
-      const result = await response.json().catch(() => ({ message: response.statusText }));
-      const nextResponse = NextResponse.json(
-        endpoint === "login" && response.ok ? { ok: true, user: result.user } : result,
-        { status: response.status, headers: { "Cache-Control": "no-store" } }
-      );
+      // Only login needs body inspection. Stream large dashboard/CRM responses.
+      const result = endpoint === "login"
+        ? await response.json().catch(() => ({ message: response.statusText }))
+        : undefined;
+      const nextResponse = endpoint === "login"
+        ? NextResponse.json(response.ok ? { ok: true, user: result.user } : result,
+          { status: response.status, headers: { "Cache-Control": "no-store" } })
+        : new NextResponse(response.body, {
+          status: response.status,
+          headers: {
+            "Content-Type": response.headers.get("content-type") || "application/json",
+            "Cache-Control": "no-store",
+          },
+        });
 
       const cookieOpts = {
         httpOnly: true,

@@ -32,7 +32,7 @@ export default function KiaCampaign({ api, canManage = false }: { api: (path: st
     let active = true;
     let loading = false;
     const load = async () => {
-      if (loading) return;
+      if (loading || document.visibilityState === "hidden") return;
       loading = true;
       try {
         const value = await api(`kiasmorang?page=${page}&search=${encodeURIComponent(search)}`);
