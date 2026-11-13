@@ -52,6 +52,13 @@ export default function KiaCampaign({ api, canManage = false }: { api: (path: st
   if (!data.campaign || !data.audience) return <section className="panel"><h2>KIASMORANG</h2><p>The Kia owners workbook has not been imported yet.</p></section>;
   if (data.apiVersion !== 2) return <section className="panel"><h2>Backend update required</h2><p>The frontend is connected to an older Kia API. Restart the backend locally, or deploy the updated backend and refresh this page. Sending and SMS editing are unavailable until both versions match.</p></section>;
   const count = (scope === "all" ? data.dispatch?.eligible : scope === "500" ? data.dispatch?.top500 : data.dispatch?.top150) || 0;
+  let reviewBlockedReason = "";
+  if (!canManage) reviewBlockedReason = "Campaign manager access is required.";
+  else if (busy) reviewBlockedReason = "A campaign action is in progress.";
+  else if (editing) reviewBlockedReason = "Save or cancel your message edits before reviewing.";
+  else if (error) reviewBlockedReason = "Campaign refresh failed. " + error;
+  else if (!count) reviewBlockedReason = "No eligible recipients for this selection.";
+  else if (!data.ready) reviewBlockedReason = data.holds?.join(" ") || "The backend reports that this campaign is not ready to send.";
   const submit = async () => {
     if (busy || !review?.count) return;
     setBusy(true); setNotice("");
@@ -101,7 +108,8 @@ export default function KiaCampaign({ api, canManage = false }: { api: (path: st
         </div>
         <p>Selected: <strong>{count.toLocaleString()} recipients</strong> · approximately {((data.sms?.estimatedSegments || 0) * count).toLocaleString()} credits. No SMS is sent until you confirm.</p>
       </fieldset>
-      <button className="btn btn-primary" disabled={!canManage || !data.ready || !count || busy || editing || !!error} onClick={() => { setRequestId(crypto.randomUUID()); setReview({ scope, count, credits: count * (data.sms?.estimatedSegments || 0), revision: data.sms?.revision || 0, preview: data.sms?.preview || data.sms?.body || "" }); setChoosing(true); setNotice(""); }}>Review send to {count.toLocaleString()}</button>
+      <button className="btn btn-primary" disabled={!!reviewBlockedReason} aria-describedby={reviewBlockedReason ? "kia-review-blocked" : undefined} onClick={() => { setRequestId(crypto.randomUUID()); setReview({ scope, count, credits: count * (data.sms?.estimatedSegments || 0), revision: data.sms?.revision || 0, preview: data.sms?.preview || data.sms?.body || "" }); setChoosing(true); setNotice(""); }}>Review send to {count.toLocaleString()}</button>
+      {reviewBlockedReason && <p id="kia-review-blocked" role="status">{reviewBlockedReason}</p>}
       {notice && <p role="status">{notice}</p>}
       {data.dispatch?.jobStatus && <p role="status">Queued: {data.dispatch.counts.queued || 0} · Sending: {data.dispatch.counts.sending || 0} · Sent: {data.dispatch.counts.sent || 0} · Delivered: {data.dispatch.counts.delivered || 0} · Failed: {data.dispatch.counts.failed || 0} · Unknown: {data.dispatch.counts.unknown || 0} · Suppressed/skipped: {(data.dispatch.counts.suppressed || 0) + (data.dispatch.counts.frequency_limited || 0)}</p>}
       {data.dispatch?.jobStatus && <p>Keep this tab open while sending on a serverless host. A continuously running backend worker can continue without the browser.</p>}
