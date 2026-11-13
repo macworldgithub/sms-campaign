@@ -11,7 +11,7 @@ type Data = {
   sms?: { body: string; characters: number; estimatedSegments: number; estimatedAudienceSegments: number; revision: number; editable: boolean; encoding: string };
   holds?: string[];
   ready: boolean;
-  dispatch?: { eligible: number; top150: number; top500?: number; counts: Record<string, number>; jobStatus: string | null; lastError: string };
+  dispatch?: { eligible: number; top150: number; top500?: number; ranges?: { scope: string; start: number; end: number; eligible: number }[]; counts: Record<string, number>; jobStatus: string | null; lastError: string };
 };
 
 export default function HyundaiCampaign({ api, canManage = false }: { api: (path: string, body?: unknown) => Promise<Data>; canManage?: boolean }) {
@@ -20,8 +20,8 @@ export default function HyundaiCampaign({ api, canManage = false }: { api: (path
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [choosing, setChoosing] = useState(false);
-  const [scope, setScope] = useState<"150" | "500" | "all">("150");
-  const [review, setReview] = useState<{ scope: typeof scope; count: number; credits: number; revision: number; preview: string } | null>(null);
+  const [scope, setScope] = useState("");
+  const [review, setReview] = useState<{ scope: string; label: string; count: number; credits: number; revision: number; preview: string } | null>(null);
   const [requestId, setRequestId] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -51,13 +51,16 @@ export default function HyundaiCampaign({ api, canManage = false }: { api: (path
   if (!data) return <section className="panel"><p role={error ? "alert" : "status"}>{error || "Loading the Hyundai campaign…"}</p></section>;
   if (!data.campaign || !data.audience) return <section className="panel"><h2>HYUNDSMORA</h2><p>The Hyundai owners workbook has not been imported yet.</p></section>;
   if (data.apiVersion !== 2) return <section className="panel"><h2>Backend update required</h2><p>The frontend is connected to an older Hyundai API. Restart the backend locally, or deploy the updated backend and refresh this page. Sending and SMS editing are unavailable until both versions match.</p></section>;
-  const count = (scope === "all" ? data.dispatch?.eligible : scope === "500" ? data.dispatch?.top500 : data.dispatch?.top150) || 0;
+  const range = data.dispatch?.ranges?.find(item => item.scope === scope);
+  const count = range?.eligible ?? 0;
+  const label = range ? `Workbook positions ${range.start}–${range.end}` : "";
+  const creditsPerRecipient = data.sms?.estimatedSegments ?? 0;
   let reviewBlockedReason = "";
   if (!canManage) reviewBlockedReason = "Campaign manager access is required.";
   else if (busy) reviewBlockedReason = "A campaign action is in progress.";
   else if (editing) reviewBlockedReason = "Save or cancel your message edits before reviewing.";
   else if (error) reviewBlockedReason = "Campaign refresh failed. " + error;
-  else if (!count) reviewBlockedReason = "No eligible recipients for this selection.";
+  else if (!count) reviewBlockedReason = "Choose a range with eligible recipients.";
   else if (!data.ready) reviewBlockedReason = data.holds?.join(" ") || "The backend reports that this campaign is not ready to send.";
   const submit = async () => {
     if (busy || !review?.count) return;
@@ -98,17 +101,22 @@ export default function HyundaiCampaign({ api, canManage = false }: { api: (path
       </div> : <><div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", padding: 20, background: "#f8fafc", border: "1px solid #e1e5eb", borderRadius: 10, lineHeight: 1.8 }}>{data.sms?.body}</div><button className="btn btn-secondary" disabled={!canManage || !data.sms?.editable || busy} onClick={() => { setDraft(data.sms?.body || ""); setEditRevision(data.sms?.revision || 0); setEditing(true); setNotice(""); }}>Edit SMS</button></>}
       {/reply\s+stop/i.test(data.sms?.body || "") && <p role="note">The saved copy says “Reply STOP”, but a named sender such as HYUNDSMORA cannot receive SMS replies. <a href="https://help.mobilemessage.com.au/sending-receiving-sms/how-unsubscribes-work" target="_blank" rel="noopener noreferrer">Mobile Message recommends a web opt-out for this sender.</a></p>}
       <p>{data.sms?.characters} characters · {data.sms?.encoding} · approximately {data.sms?.estimatedSegments} parts per recipient · {data.sms?.estimatedAudienceSegments.toLocaleString()} estimated credits for all eligible recipients. Balance is checked before queuing.</p>
-      <p>{data.dispatch?.eligible.toLocaleString()} unsent eligible recipients. Top 150 and Top 500 use the first eligible records in the original workbook order; search and pagination do not change this selection. Suppressed, previously selected and frequency-limited numbers are excluded.</p>
+      <p>{data.dispatch?.eligible.toLocaleString()} unsent eligible recipients. Ranges use fixed positions in the original workbook order; search and pagination do not change this selection. Suppressed, previously selected and frequency-limited numbers are excluded.</p>
       <fieldset disabled={busy || editing || !canManage} style={{ border: "1px solid #d8dee7", borderRadius: 8, padding: 16, margin: "16px 0" }}>
-        <legend>How many people should receive this SMS?</legend>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}><input style={{ width: "auto", margin: 0 }} type="radio" name="hyundai-recipient-count" checked={scope === "150"} onChange={() => setScope("150")} /> Top 150 ({data.dispatch?.top150 || 0} eligible)</label>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}><input style={{ width: "auto", margin: 0 }} type="radio" disabled={data.dispatch?.top500 === undefined} name="hyundai-recipient-count" checked={scope === "500"} onChange={() => setScope("500")} /> Top 500 ({data.dispatch?.top500 || 0} eligible)</label>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}><input style={{ width: "auto", margin: 0 }} type="radio" name="hyundai-recipient-count" checked={scope === "all"} onChange={() => setScope("all")} /> All ({data.dispatch?.eligible || 0} eligible)</label>
-        </div>
-        <p>Selected: <strong>{count.toLocaleString()} recipients</strong> · approximately {((data.sms?.estimatedSegments || 0) * count).toLocaleString()} credits. No SMS is sent until you confirm.</p>
+        <legend>Choose a recipient range</legend>
+        {data.dispatch?.ranges ? (
+          <select aria-label="Recipient range" value={scope} onChange={event => setScope(event.target.value)}>
+            <option value="">Select a range</option>
+            {data.dispatch.ranges.map(item => (
+              <option key={item.scope} value={item.scope} disabled={!item.eligible}>
+                {item.start.toLocaleString()}–{item.end.toLocaleString()} ({item.eligible.toLocaleString()} eligible)
+              </option>
+            ))}
+          </select>
+        ) : <p>Update the backend to enable recipient ranges.</p>}
+        <p>Estimated {creditsPerRecipient} credits per recipient. Selected: <strong>{count.toLocaleString()} recipients</strong> · approximately {(creditsPerRecipient * count).toLocaleString()} credits.</p>
       </fieldset>
-      <button className="btn btn-primary" disabled={!!reviewBlockedReason} aria-describedby={reviewBlockedReason ? "hyundai-review-blocked" : undefined} onClick={() => { setRequestId(crypto.randomUUID()); setReview({ scope, count, credits: count * (data.sms?.estimatedSegments || 0), revision: data.sms?.revision || 0, preview: data.sms?.body || "" }); setChoosing(true); setNotice(""); }}>Review send to {count.toLocaleString()}</button>
+      <button className="btn btn-primary" disabled={!!reviewBlockedReason} aria-describedby={reviewBlockedReason ? "hyundai-review-blocked" : undefined} onClick={() => { setRequestId(crypto.randomUUID()); setReview({ scope, label, count, credits: count * (data.sms?.estimatedSegments || 0), revision: data.sms?.revision || 0, preview: data.sms?.body || "" }); setChoosing(true); setNotice(""); }}>Review send to {count.toLocaleString()}</button>
       {reviewBlockedReason && <p id="hyundai-review-blocked" role="status">{reviewBlockedReason}</p>}
       {notice && <p role="status">{notice}</p>}
       {data.dispatch?.jobStatus && <p role="status">Queued: {data.dispatch.counts.queued || 0} · Sending: {data.dispatch.counts.sending || 0} · Sent: {data.dispatch.counts.sent || 0} · Delivered: {data.dispatch.counts.delivered || 0} · Failed: {data.dispatch.counts.failed || 0} · Unknown: {data.dispatch.counts.unknown || 0} · Suppressed/skipped: {(data.dispatch.counts.suppressed || 0) + (data.dispatch.counts.frequency_limited || 0)}</p>}
@@ -127,7 +135,7 @@ export default function HyundaiCampaign({ api, canManage = false }: { api: (path
     </section>
     {choosing && review && <div className="modal-overlay"><section className="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="hyundai-send-title">
       <h2 id="hyundai-send-title">Confirm campaign send</h2>
-      <p>Selection: {review.scope === "all" ? "All remaining eligible" : review.scope === "500" ? "Top 500 eligible" : "Top 150 eligible"}. Cancel to change your selection.</p>
+      <p>Selection: {review.label}. Cancel to change your selection.</p>
       <p><strong>Send from HYUNDSMORA to {review.count.toLocaleString()} recipients.</strong> Estimated credits: {review.credits.toLocaleString()}.</p>
       <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{review.preview}</p>
       <p>This sends real SMS. Previously selected customers will not be sent this campaign again.</p>
